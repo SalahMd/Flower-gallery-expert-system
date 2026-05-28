@@ -1,0 +1,6 @@
+GRID_WIDTH = 4
+GRID_HEIGHT = 4
+
+WAREHOUSE = (2, 3)
+
+PAVILIONS = [...]
