@@ -1,61 +1,191 @@
 from facts.world_facts import (
-    Grid, Warehouse, WarehouseStock, Pavilion, PavilionNeed, PavilionBouquetTotal,
+    Grid, Cell, NeighborCell, Warehouse, WarehouseStock, Pavilion,
+    FlowerKind, FlowerColor, Bouquet,
+    PavilionNeed, PavilionBouquetTotal,
+    PavilionColorNeedTotal, PavilionFlowerNeedTotal,
 )
-from facts.robot_facts import RobotState, AtWarehouse, AtPavilion
+from facts.robot_facts import RobotPosition, RobotState, RobotCapacity, RobotEmpty
 from facts.cargo_facts import MaxCapacity, TotalCargoCount
 from facts.search_facts import SearchNode, OpenNode, NodeCounter
 
-from config.config import (
-    GRID_ROWS, GRID_COLS,
-    WAREHOUSE_POS, ROBOT_START,
-    PAVILIONS, PAVILION_NEEDS, WAREHOUSE_STOCK,
-)
-
 
 def build_initial_facts():
-    facts = []
-
-    facts.append(Grid(rows=GRID_ROWS, cols=GRID_COLS))
-
-    wh_row, wh_col = WAREHOUSE_POS
-    facts.append(Warehouse(row=wh_row, col=wh_col))
-
-    for ft, col in WAREHOUSE_STOCK:
-        facts.append(WarehouseStock(flower_type=ft, color=col))
-
-    max_need = 0
-    for pav_id, pos in PAVILIONS.items():
-        prow, pcol = pos
-        facts.append(Pavilion(id=pav_id, row=prow, col=pcol))
-        needs = PAVILION_NEEDS.get(pav_id, [])
-        total_for_pav = 0
-        for ft, col, qty in needs:
-            facts.append(PavilionNeed(
-                pavilion_id=pav_id, flower_type=ft, color=col, quantity=qty,
-            ))
-            total_for_pav += qty
-        facts.append(PavilionBouquetTotal(pavilion_id=pav_id, total=total_for_pav))
-        if total_for_pav > max_need:
-            max_need = total_for_pav
-
-    facts.append(MaxCapacity(value=max_need))
-
-    root_id = "n0"
-    rr, rc = ROBOT_START
-    facts.append(SearchNode(
-        node_id=root_id, parent_id=root_id,
-        action="start", g_cost=0, h_cost=0, f_cost=0,
-    ))
-    facts.append(RobotState(node_id=root_id, row=rr, col=rc))
-    facts.append(TotalCargoCount(node_id=root_id, count=0))
-    facts.append(NodeCounter(value=1))
-    facts.append(OpenNode(node_id=root_id, f_cost=0, g_cost=0))
-
-    if rr == wh_row and rc == wh_col:
-        facts.append(AtWarehouse(node_id=root_id))
-    else:
-        for pav_id, pos in PAVILIONS.items():
-            if pos == (rr, rc):
-                facts.append(AtPavilion(node_id=root_id, pavilion_id=pav_id))
-
-    return facts
+    return [
+        Grid(rows=5, cols=5),
+        Cell(row=0, col=0),
+        Cell(row=0, col=1),
+        Cell(row=0, col=2),
+        Cell(row=0, col=3),
+        Cell(row=0, col=4),
+        Cell(row=1, col=0),
+        Cell(row=1, col=1),
+        Cell(row=1, col=2),
+        Cell(row=1, col=3),
+        Cell(row=1, col=4),
+        Cell(row=2, col=0),
+        Cell(row=2, col=1),
+        Cell(row=2, col=2),
+        Cell(row=2, col=3),
+        Cell(row=2, col=4),
+        Cell(row=3, col=0),
+        Cell(row=3, col=1),
+        Cell(row=3, col=2),
+        Cell(row=3, col=3),
+        Cell(row=3, col=4),
+        Cell(row=4, col=0),
+        Cell(row=4, col=1),
+        Cell(row=4, col=2),
+        Cell(row=4, col=3),
+        Cell(row=4, col=4),
+        NeighborCell(row=0, col=0, direction="right", next_row=0, next_col=1),
+        NeighborCell(row=0, col=1, direction="left", next_row=0, next_col=0),
+        NeighborCell(row=0, col=1, direction="right", next_row=0, next_col=2),
+        NeighborCell(row=0, col=2, direction="left", next_row=0, next_col=1),
+        NeighborCell(row=0, col=2, direction="right", next_row=0, next_col=3),
+        NeighborCell(row=0, col=3, direction="left", next_row=0, next_col=2),
+        NeighborCell(row=0, col=3, direction="right", next_row=0, next_col=4),
+        NeighborCell(row=0, col=4, direction="left", next_row=0, next_col=3),
+        NeighborCell(row=1, col=0, direction="right", next_row=1, next_col=1),
+        NeighborCell(row=1, col=1, direction="left", next_row=1, next_col=0),
+        NeighborCell(row=1, col=1, direction="right", next_row=1, next_col=2),
+        NeighborCell(row=1, col=2, direction="left", next_row=1, next_col=1),
+        NeighborCell(row=1, col=2, direction="right", next_row=1, next_col=3),
+        NeighborCell(row=1, col=3, direction="left", next_row=1, next_col=2),
+        NeighborCell(row=1, col=3, direction="right", next_row=1, next_col=4),
+        NeighborCell(row=1, col=4, direction="left", next_row=1, next_col=3),
+        NeighborCell(row=2, col=0, direction="right", next_row=2, next_col=1),
+        NeighborCell(row=2, col=1, direction="left", next_row=2, next_col=0),
+        NeighborCell(row=2, col=1, direction="right", next_row=2, next_col=2),
+        NeighborCell(row=2, col=2, direction="left", next_row=2, next_col=1),
+        NeighborCell(row=2, col=2, direction="right", next_row=2, next_col=3),
+        NeighborCell(row=2, col=3, direction="left", next_row=2, next_col=2),
+        NeighborCell(row=2, col=3, direction="right", next_row=2, next_col=4),
+        NeighborCell(row=2, col=4, direction="left", next_row=2, next_col=3),
+        NeighborCell(row=3, col=0, direction="right", next_row=3, next_col=1),
+        NeighborCell(row=3, col=1, direction="left", next_row=3, next_col=0),
+        NeighborCell(row=3, col=1, direction="right", next_row=3, next_col=2),
+        NeighborCell(row=3, col=2, direction="left", next_row=3, next_col=1),
+        NeighborCell(row=3, col=2, direction="right", next_row=3, next_col=3),
+        NeighborCell(row=3, col=3, direction="left", next_row=3, next_col=2),
+        NeighborCell(row=3, col=3, direction="right", next_row=3, next_col=4),
+        NeighborCell(row=3, col=4, direction="left", next_row=3, next_col=3),
+        NeighborCell(row=4, col=0, direction="right", next_row=4, next_col=1),
+        NeighborCell(row=4, col=1, direction="left", next_row=4, next_col=0),
+        NeighborCell(row=4, col=1, direction="right", next_row=4, next_col=2),
+        NeighborCell(row=4, col=2, direction="left", next_row=4, next_col=1),
+        NeighborCell(row=4, col=2, direction="right", next_row=4, next_col=3),
+        NeighborCell(row=4, col=3, direction="left", next_row=4, next_col=2),
+        NeighborCell(row=4, col=3, direction="right", next_row=4, next_col=4),
+        NeighborCell(row=4, col=4, direction="left", next_row=4, next_col=3),
+        NeighborCell(row=0, col=0, direction="down", next_row=1, next_col=0),
+        NeighborCell(row=1, col=0, direction="up", next_row=0, next_col=0),
+        NeighborCell(row=1, col=0, direction="down", next_row=2, next_col=0),
+        NeighborCell(row=2, col=0, direction="up", next_row=1, next_col=0),
+        NeighborCell(row=2, col=0, direction="down", next_row=3, next_col=0),
+        NeighborCell(row=3, col=0, direction="up", next_row=2, next_col=0),
+        NeighborCell(row=3, col=0, direction="down", next_row=4, next_col=0),
+        NeighborCell(row=4, col=0, direction="up", next_row=3, next_col=0),
+        NeighborCell(row=0, col=1, direction="down", next_row=1, next_col=1),
+        NeighborCell(row=1, col=1, direction="up", next_row=0, next_col=1),
+        NeighborCell(row=1, col=1, direction="down", next_row=2, next_col=1),
+        NeighborCell(row=2, col=1, direction="up", next_row=1, next_col=1),
+        NeighborCell(row=2, col=1, direction="down", next_row=3, next_col=1),
+        NeighborCell(row=3, col=1, direction="up", next_row=2, next_col=1),
+        NeighborCell(row=3, col=1, direction="down", next_row=4, next_col=1),
+        NeighborCell(row=4, col=1, direction="up", next_row=3, next_col=1),
+        NeighborCell(row=0, col=2, direction="down", next_row=1, next_col=2),
+        NeighborCell(row=1, col=2, direction="up", next_row=0, next_col=2),
+        NeighborCell(row=1, col=2, direction="down", next_row=2, next_col=2),
+        NeighborCell(row=2, col=2, direction="up", next_row=1, next_col=2),
+        NeighborCell(row=2, col=2, direction="down", next_row=3, next_col=2),
+        NeighborCell(row=3, col=2, direction="up", next_row=2, next_col=2),
+        NeighborCell(row=3, col=2, direction="down", next_row=4, next_col=2),
+        NeighborCell(row=4, col=2, direction="up", next_row=3, next_col=2),
+        NeighborCell(row=0, col=3, direction="down", next_row=1, next_col=3),
+        NeighborCell(row=1, col=3, direction="up", next_row=0, next_col=3),
+        NeighborCell(row=1, col=3, direction="down", next_row=2, next_col=3),
+        NeighborCell(row=2, col=3, direction="up", next_row=1, next_col=3),
+        NeighborCell(row=2, col=3, direction="down", next_row=3, next_col=3),
+        NeighborCell(row=3, col=3, direction="up", next_row=2, next_col=3),
+        NeighborCell(row=3, col=3, direction="down", next_row=4, next_col=3),
+        NeighborCell(row=4, col=3, direction="up", next_row=3, next_col=3),
+        NeighborCell(row=0, col=4, direction="down", next_row=1, next_col=4),
+        NeighborCell(row=1, col=4, direction="up", next_row=0, next_col=4),
+        NeighborCell(row=1, col=4, direction="down", next_row=2, next_col=4),
+        NeighborCell(row=2, col=4, direction="up", next_row=1, next_col=4),
+        NeighborCell(row=2, col=4, direction="down", next_row=3, next_col=4),
+        NeighborCell(row=3, col=4, direction="up", next_row=2, next_col=4),
+        NeighborCell(row=3, col=4, direction="down", next_row=4, next_col=4),
+        NeighborCell(row=4, col=4, direction="up", next_row=3, next_col=4),
+        Warehouse(row=1, col=2),
+        Pavilion(id="p1", row=3, col=1),
+        Pavilion(id="p2", row=2, col=3),
+        Pavilion(id="p3", row=4, col=3),
+        Pavilion(id="p4", row=1, col=4),
+        FlowerKind(flower_type="rose"),
+        FlowerKind(flower_type="tulip"),
+        FlowerKind(flower_type="lily"),
+        FlowerKind(flower_type="juliet"),
+        FlowerKind(flower_type="orchid"),
+        FlowerColor(color="red"),
+        FlowerColor(color="pink"),
+        FlowerColor(color="white"),
+        FlowerColor(color="yellow"),
+        FlowerColor(color="gold"),
+        FlowerColor(color="purple"),
+        Bouquet(flower_type="rose", color="red"),
+        Bouquet(flower_type="rose", color="pink"),
+        Bouquet(flower_type="rose", color="white"),
+        Bouquet(flower_type="tulip", color="yellow"),
+        Bouquet(flower_type="tulip", color="red"),
+        Bouquet(flower_type="lily", color="white"),
+        Bouquet(flower_type="juliet", color="gold"),
+        Bouquet(flower_type="juliet", color="pink"),
+        Bouquet(flower_type="orchid", color="purple"),
+        Bouquet(flower_type="orchid", color="pink"),
+        WarehouseStock(flower_type="rose", color="red"),
+        WarehouseStock(flower_type="rose", color="pink"),
+        WarehouseStock(flower_type="rose", color="white"),
+        WarehouseStock(flower_type="tulip", color="yellow"),
+        WarehouseStock(flower_type="tulip", color="red"),
+        WarehouseStock(flower_type="lily", color="white"),
+        WarehouseStock(flower_type="juliet", color="gold"),
+        WarehouseStock(flower_type="juliet", color="pink"),
+        WarehouseStock(flower_type="orchid", color="purple"),
+        WarehouseStock(flower_type="orchid", color="pink"),
+        PavilionNeed(pavilion_id="p1", flower_type="rose", color="red", quantity=1),
+        PavilionNeed(pavilion_id="p1", flower_type="rose", color="pink", quantity=1),
+        PavilionNeed(pavilion_id="p1", flower_type="rose", color="white", quantity=1),
+        PavilionNeed(pavilion_id="p2", flower_type="tulip", color="yellow", quantity=1),
+        PavilionNeed(pavilion_id="p2", flower_type="tulip", color="red", quantity=3),
+        PavilionNeed(pavilion_id="p3", flower_type="orchid", color="purple", quantity=2),
+        PavilionNeed(pavilion_id="p3", flower_type="orchid", color="pink", quantity=1),
+        PavilionNeed(pavilion_id="p4", flower_type="juliet", color="gold", quantity=2),
+        PavilionNeed(pavilion_id="p4", flower_type="juliet", color="pink", quantity=2),
+        PavilionBouquetTotal(pavilion_id="p1", total=3),
+        PavilionBouquetTotal(pavilion_id="p2", total=4),
+        PavilionBouquetTotal(pavilion_id="p3", total=3),
+        PavilionBouquetTotal(pavilion_id="p4", total=4),
+        PavilionColorNeedTotal(pavilion_id="p1", color="red", total=1),
+        PavilionColorNeedTotal(pavilion_id="p1", color="pink", total=1),
+        PavilionColorNeedTotal(pavilion_id="p1", color="white", total=1),
+        PavilionColorNeedTotal(pavilion_id="p2", color="yellow", total=1),
+        PavilionColorNeedTotal(pavilion_id="p2", color="red", total=3),
+        PavilionColorNeedTotal(pavilion_id="p3", color="purple", total=2),
+        PavilionColorNeedTotal(pavilion_id="p3", color="pink", total=1),
+        PavilionColorNeedTotal(pavilion_id="p4", color="gold", total=2),
+        PavilionColorNeedTotal(pavilion_id="p4", color="pink", total=2),
+        PavilionFlowerNeedTotal(pavilion_id="p1", flower_type="rose", total=3),
+        PavilionFlowerNeedTotal(pavilion_id="p2", flower_type="tulip", total=4),
+        PavilionFlowerNeedTotal(pavilion_id="p3", flower_type="orchid", total=3),
+        PavilionFlowerNeedTotal(pavilion_id="p4", flower_type="juliet", total=4),
+        MaxCapacity(value=4),
+        RobotCapacity(value=4),
+        SearchNode(node_id="n0", parent_id="n0", action="start", g_cost=0, h_cost=0, f_cost=0),
+        RobotPosition(node_id="n0", row=0, col=2),
+        RobotState(node_id="n0", row=0, col=2),
+        RobotEmpty(node_id="n0"),
+        TotalCargoCount(node_id="n0", count=0),
+        NodeCounter(value=1),
+        OpenNode(node_id="n0", f_cost=0, g_cost=0),
+    ]

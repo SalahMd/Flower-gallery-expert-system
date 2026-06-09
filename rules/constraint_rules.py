@@ -1,14 +1,10 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
 from facts.search_facts import SearchNode, OpenNode, ClosedNode
-from facts.constraint_facts import PruneNode
+from facts.constraint_facts import PruneNode, ValidCargo
 from facts.cargo_facts import CargoItem, TotalCargoCount, MaxCapacity, MixedCargo, OverCapacity
-from facts.constraint_facts import ValidCargo
-from facts.constraint_facts import PruneNode
-from facts.cargo_facts import MixedCargo, OverCapacity 
-from facts.constraint_facts import ValidCargo 
 
 
-class ConstraintRules (KnowledgeEngine):
+class ConstraintRules(KnowledgeEngine):
 
     @Rule(
         SearchNode(node_id=MATCH.nid),
@@ -19,7 +15,7 @@ class ConstraintRules (KnowledgeEngine):
         TEST(lambda ft1, ft2, col1, col2: ft1 != ft2 and col1 != col2),
         NOT(MixedCargo(node_id=MATCH.nid)),
     )
-    def flag_mixed_cargo(self, nid):
+    def flag_mixed_cargo(self, nid, ft1, col1, ft2, col2):
         self.declare(MixedCargo(node_id=nid))
 
     @Rule(
@@ -42,7 +38,7 @@ class ConstraintRules (KnowledgeEngine):
         TEST(lambda count, cap: count > cap),
         NOT(OverCapacity(node_id=MATCH.nid)),
     )
-    def flag_over_capacity(self, nid):
+    def flag_over_capacity(self, nid, count, cap):
         self.declare(OverCapacity(node_id=nid))
 
     @Rule(

@@ -28,6 +28,31 @@ class GoalNode(Fact):
     node_id = Field(str)
 
 
+class SearchStopped(Fact):
+    max_steps = Field(int)
+
+
+class OutputHeader(Fact):
+    name = Field(str)
+
+
+class OutputNode(Fact):
+    name = Field(str)
+    node_id = Field(str)
+
+
+class OutputBacktrack(Fact):
+    node_id = Field(str)
+    parent_id = Field(str)
+
+
+class StateCost(Fact):
+    node_id = Field(str)
+    g_cost = Field(int)
+    h_cost = Field(int)
+    f_cost = Field(int)
+
+
 class Delivered(Fact):
     node_id = Field(str)
     pavilion_id = Field(str)
@@ -38,6 +63,11 @@ class Delivered(Fact):
 
 class NodeCounter(Fact):
     value = Field(int)
+
+
+class NextNodeId(Fact):
+    parent_id = Field(str)
+    child_id = Field(str)
 
 
 class Phase(Fact):
@@ -52,6 +82,8 @@ class PendingSuccessor(Fact):
 class MoveGenerated(Fact):
     parent_id = Field(str)
     direction = Field(str)
+    row = Field(int, mandatory=False)
+    col = Field(int, mandatory=False)
 
 
 class LoadGenerated(Fact):
