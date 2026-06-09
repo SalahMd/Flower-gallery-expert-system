@@ -10,6 +10,8 @@ from facts.world_facts import Warehouse, Pavilion, PavilionNeed, PavilionBouquet
 
 class TransitionRules(KnowledgeEngine):
 
+    # --- StateCopy (move action) ---
+
     @Rule(
         StateCopy(parent_id=MATCH.pid, child_id=MATCH.cid),
         Delivered(node_id=MATCH.pid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
@@ -52,13 +54,26 @@ class TransitionRules(KnowledgeEngine):
     def copy_at_pavilion(self, pid, cid, pav_id, row, col):
         self.declare(AtPavilion(node_id=cid, pavilion_id=pav_id))
 
+    # cleanup once TotalCargoCount exists on child - or when child has no cargo at all
     @Rule(
         AS.sc << StateCopy(parent_id=MATCH.pid, child_id=MATCH.cid),
         TotalCargoCount(node_id=MATCH.cid),
         salience=1,
     )
-    def cleanup_state_copy(self, sc, pid, cid):
+    def cleanup_state_copy_with_cargo(self, sc, pid, cid):
         self.retract(sc)
+
+    @Rule(
+        AS.sc << StateCopy(parent_id=MATCH.pid, child_id=MATCH.cid),
+        NOT(CargoItem(node_id=MATCH.pid)),
+        NOT(TotalCargoCount(node_id=MATCH.cid)),
+        salience=1,
+    )
+    def cleanup_state_copy_empty(self, sc, pid, cid):
+        self.declare(TotalCargoCount(node_id=cid, count=0))
+        self.retract(sc)
+
+    # --- LoadApply ---
 
     @Rule(
         LoadApply(parent_id=MATCH.pid, child_id=MATCH.cid, flower_type=MATCH.lft, color=MATCH.lcol),
@@ -117,8 +132,11 @@ class TransitionRules(KnowledgeEngine):
     def cleanup_load_apply(self, la, pid, cid):
         self.retract(la)
 
+    # --- UnloadColorApply (single color/type unload) ---
+
     @Rule(
-        UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.action_pav, flower_type=MATCH.uft, color=MATCH.ucol),
+        UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.action_pav,
+                         flower_type=MATCH.uft, color=MATCH.ucol),
         Delivered(node_id=MATCH.pid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
         NOT(Delivered(node_id=MATCH.cid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)),
     )
@@ -126,13 +144,15 @@ class TransitionRules(KnowledgeEngine):
         self.declare(Delivered(node_id=cid, pavilion_id=pav, flower_type=ft, color=col, quantity=qty))
 
     @Rule(
-        UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav, flower_type=MATCH.uft, color=MATCH.ucol),
+        UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav,
+                         flower_type=MATCH.uft, color=MATCH.ucol),
         PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.uft, color=MATCH.ucol, quantity=MATCH.needed),
         NOT(Delivered(node_id=MATCH.cid, pavilion_id=MATCH.pav, flower_type=MATCH.uft, color=MATCH.ucol)),
     )
     def unload_color_mark_delivered(self, pid, cid, pav, uft, ucol, needed):
         self.declare(Delivered(node_id=cid, pavilion_id=pav, flower_type=uft, color=ucol, quantity=needed))
 
+    # quantity drops to leftover if we had more than needed
     @Rule(
         UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, flower_type=MATCH.uft, color=MATCH.ucol),
         CargoItem(node_id=MATCH.pid, flower_type=MATCH.uft, color=MATCH.ucol, quantity=MATCH.qty),
@@ -143,6 +163,7 @@ class TransitionRules(KnowledgeEngine):
     def unload_color_reduce_line(self, pid, cid, uft, ucol, qty, needed, pav):
         self.declare(CargoItem(node_id=cid, flower_type=uft, color=ucol, quantity=qty - needed))
 
+    # copy unaffected cargo lines unchanged
     @Rule(
         UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, flower_type=MATCH.uft, color=MATCH.ucol),
         CargoItem(node_id=MATCH.pid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
@@ -153,7 +174,8 @@ class TransitionRules(KnowledgeEngine):
         self.declare(CargoItem(node_id=cid, flower_type=ft, color=col, quantity=qty))
 
     @Rule(
-        AS.uca << UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav, flower_type=MATCH.uft, color=MATCH.ucol),
+        AS.uca << UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav,
+                                   flower_type=MATCH.uft, color=MATCH.ucol),
         TotalCargoCount(node_id=MATCH.pid, count=MATCH.cnt),
         PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.uft, color=MATCH.ucol, quantity=MATCH.needed),
         NOT(TotalCargoCount(node_id=MATCH.cid)),
@@ -171,12 +193,15 @@ class TransitionRules(KnowledgeEngine):
         self.declare(AtPavilion(node_id=cid, pavilion_id=pav_id))
 
     @Rule(
-        AS.uca << UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav, flower_type=MATCH.uft, color=MATCH.ucol),
+        AS.uca << UnloadColorApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav,
+                                   flower_type=MATCH.uft, color=MATCH.ucol),
         TotalCargoCount(node_id=MATCH.cid),
         salience=1,
     )
     def cleanup_unload_color_apply(self, uca, pid, cid, pav, uft, ucol):
         self.retract(uca)
+
+    # --- UnloadPavilionApply (deliver everything the pavilion needs at once) ---
 
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.action_pav),
@@ -186,6 +211,7 @@ class TransitionRules(KnowledgeEngine):
     def unload_pav_copy_old_delivered(self, pid, cid, action_pav, pav, ft, col, qty):
         self.declare(Delivered(node_id=cid, pavilion_id=pav, flower_type=ft, color=col, quantity=qty))
 
+    # mark every need of this pavilion as delivered in the new state
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav),
         PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.needed),
@@ -194,6 +220,7 @@ class TransitionRules(KnowledgeEngine):
     def unload_pav_mark_each_need(self, pid, cid, pav, ft, col, needed):
         self.declare(Delivered(node_id=cid, pavilion_id=pav, flower_type=ft, color=col, quantity=needed))
 
+    # cargo item that exactly matched a pavilion need -> drop it
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav),
         CargoItem(node_id=MATCH.pid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
@@ -202,8 +229,9 @@ class TransitionRules(KnowledgeEngine):
         TEST(lambda qty, needed: qty == needed),
     )
     def unload_pav_clear_used_line(self, pid, cid, pav, ft, col, qty, needed):
-        pass
+        pass  # intentionally nothing - line is consumed
 
+    # cargo item had more than the pavilion needed -> keep the leftover
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav),
         CargoItem(node_id=MATCH.pid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
@@ -214,6 +242,7 @@ class TransitionRules(KnowledgeEngine):
     def unload_pav_drop_partial(self, pid, cid, pav, ft, col, qty, needed):
         self.declare(CargoItem(node_id=cid, flower_type=ft, color=col, quantity=qty - needed))
 
+    # cargo item that has nothing to do with this pavilion -> keep as is
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav),
         CargoItem(node_id=MATCH.pid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
@@ -223,6 +252,7 @@ class TransitionRules(KnowledgeEngine):
     def unload_pav_keep_other_cargo(self, pid, cid, pav, ft, col, qty):
         self.declare(CargoItem(node_id=cid, flower_type=ft, color=col, quantity=qty))
 
+    # recount total cargo after unload by iterating remaining items
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid),
         NOT(PendingCargoTotal(child_id=MATCH.cid)),
@@ -241,23 +271,28 @@ class TransitionRules(KnowledgeEngine):
         self.declare(PendingCargoTotal(child_id=cid, total=t + qty))
         self.declare(CargoLineCounted(child_id=cid, flower_type=ft, color=col))
 
+    # when no more uncounted items, set TotalCargoCount from accumulated pending total
     @Rule(
-        UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid, pavilion_id=MATCH.pav),
-        TotalCargoCount(node_id=MATCH.pid, count=MATCH.cnt),
-        PavilionBouquetTotal(pavilion_id=MATCH.pav, total=MATCH.drop),
-        NOT(PavilionHasExtraCargo(node_id=MATCH.pid, pavilion_id=MATCH.pav)),
+        UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid),
+        AS.pt << PendingCargoTotal(child_id=MATCH.cid, total=MATCH.t),
         NOT(TotalCargoCount(node_id=MATCH.cid)),
+        NOT(
+            CargoItem(node_id=MATCH.cid)
+        ),
     )
-    def unload_pav_total_clean(self, pid, cid, pav, cnt, drop):
-        self.declare(TotalCargoCount(node_id=cid, count=cnt - drop))
+    def unload_pav_finish_counted_empty(self, pt, pid, cid, t):
+        self.retract(pt)
+        self.declare(TotalCargoCount(node_id=cid, count=t))
 
     @Rule(
         UnloadPavilionApply(parent_id=MATCH.pid, child_id=MATCH.cid),
-        PendingCargoTotal(child_id=MATCH.cid, total=MATCH.t),
+        AS.pt << PendingCargoTotal(child_id=MATCH.cid, total=MATCH.t),
         NOT(TotalCargoCount(node_id=MATCH.cid)),
-        NOT(CargoItem(node_id=MATCH.cid)),
+        NOT(CargoLineCounted(child_id=MATCH.cid)),
+        salience=2,
     )
-    def unload_pav_finish_counted(self, pid, cid, t):
+    def unload_pav_finish_counted_all_dropped(self, pt, pid, cid, t):
+        self.retract(pt)
         self.declare(TotalCargoCount(node_id=cid, count=t))
 
     @Rule(

@@ -14,13 +14,8 @@ class MovementRules(KnowledgeEngine):
         CurrentNode(node_id=MATCH.nid),
         NOT(ExpandVisited(node_id=MATCH.nid)),
         RobotState(node_id=MATCH.nid, row=MATCH.row, col=MATCH.col),
-        NeighborCell(
-            row=MATCH.row,
-            col=MATCH.col,
-            direction=MATCH.direction,
-            next_row=MATCH.next_row,
-            next_col=MATCH.next_col,
-        ),
+        NeighborCell(row=MATCH.row, col=MATCH.col, direction=MATCH.direction,
+                     next_row=MATCH.next_row, next_col=MATCH.next_col),
         NOT(MoveGenerated(parent_id=MATCH.nid, direction=MATCH.direction)),
     )
     def generate_move(self, nid, row, col, direction, next_row, next_col):

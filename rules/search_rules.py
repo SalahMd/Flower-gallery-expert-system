@@ -8,40 +8,80 @@ from facts.search_facts import Delivered
 
 class SearchRules(KnowledgeEngine):
 
-    @Rule(SearchNode(node_id=MATCH.nid), CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
-          NOT(CargoSnap(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)), salience=5)
+    @Rule(
+        SearchNode(node_id=MATCH.nid),
+        CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
+        NOT(CargoSnap(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)),
+        salience=5,
+    )
     def snap_cargo(self, nid, ft, col, qty):
         self.declare(CargoSnap(node_id=nid, flower_type=ft, color=col, quantity=qty))
 
-    @Rule(SearchNode(node_id=MATCH.nid), RobotState(node_id=MATCH.nid),
-          TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt), NOT(CargoItem(node_id=MATCH.nid)),
-          NOT(StateReady(node_id=MATCH.nid)), salience=5)
+    @Rule(
+        SearchNode(node_id=MATCH.nid),
+        RobotState(node_id=MATCH.nid),
+        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
+        NOT(CargoItem(node_id=MATCH.nid)),
+        NOT(StateReady(node_id=MATCH.nid)),
+        salience=5,
+    )
     def snap_empty_ready(self, nid, cnt):
         self.declare(StateReady(node_id=nid))
 
-    @Rule(SearchNode(node_id=MATCH.nid), RobotState(node_id=MATCH.nid), NOT(StateReady(node_id=MATCH.nid)), salience=6)
+    @Rule(
+        SearchNode(node_id=MATCH.nid),
+        RobotState(node_id=MATCH.nid),
+        NOT(StateReady(node_id=MATCH.nid)),
+        salience=6,
+    )
     def mark_state_ready(self, nid):
         self.declare(StateReady(node_id=nid))
 
-    @Rule(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col),
-          NOT(DelSnap(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)), salience=5)
+    @Rule(
+        Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col),
+        NOT(DelSnap(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)),
+        salience=5,
+    )
     def snap_delivered(self, nid, pav, ft, col):
         self.declare(DelSnap(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
 
-    @Rule(ClosedNode(node_id=MATCH.nid), RobotState(node_id=MATCH.nid, row=MATCH.row, col=MATCH.col),
-          SearchNode(node_id=MATCH.nid, g_cost=MATCH.g), TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
-          StateReady(node_id=MATCH.nid), NOT(ClosedPosSig(row=MATCH.row, col=MATCH.col, cargo_total=MATCH.cnt, node_id=MATCH.nid)), salience=50)
+    @Rule(
+        ClosedNode(node_id=MATCH.nid),
+        RobotState(node_id=MATCH.nid, row=MATCH.row, col=MATCH.col),
+        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
+        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
+        StateReady(node_id=MATCH.nid),
+        NOT(ClosedPosSig(row=MATCH.row, col=MATCH.col, cargo_total=MATCH.cnt, node_id=MATCH.nid)),
+        salience=50,
+    )
     def record_closed_sig(self, nid, row, col, g, cnt):
         self.declare(ClosedPosSig(row=row, col=col, cargo_total=cnt, node_id=nid, g_cost=g))
 
-    @Rule(AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
-          AS.ob << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_old, g_cost=MATCH.g_old),
-          TEST(lambda f_new, f_old, g_new, g_old: (f_new, g_new) != (f_old, g_old) and (f_new < f_old or (f_new == f_old and g_new < g_old))), salience=80)
+    # keep the open entry with the better (lower) f/g, drop the worse one
+    @Rule(
+        AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
+        AS.ob << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_old, g_cost=MATCH.g_old),
+        TEST(lambda f_new, f_old, g_new, g_old:
+             (f_new, g_new) != (f_old, g_old) and
+             (f_new < f_old or (f_new == f_old and g_new < g_old))),
+        salience=80,
+    )
     def keep_better_open(self, on, ob, nid, f_new, f_old):
         self.retract(ob)
+        print(f"[OPEN KEEP] node={nid}, better f={f_new}, worse f={f_old}")
 
-    @Rule(AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
-          AS.ob << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_old, g_cost=MATCH.g_old),
-          TEST(lambda f_new, f_old, g_new, g_old: (f_new, g_new) != (f_old, g_old) and (f_new > f_old or (f_new == f_old and g_new > g_old))), salience=80)
+    @Rule(
+        AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
+        AS.ob << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_old, g_cost=MATCH.g_old),
+        TEST(lambda f_new, f_old, g_new, g_old:
+             (f_new, g_new) != (f_old, g_old) and
+             (f_new > f_old or (f_new == f_old and g_new > g_old))),
+        salience=80,
+    )
     def drop_worse_open_dup(self, on, ob, nid, f_new, f_old):
         self.retract(on)
+        print(f"[OPEN DROP] node={nid}, dropping f={f_new}")
+        
+    @Rule(SearchNode(node_id=MATCH.nid))
+    def trace_all_nodes(self, nid):
+        print(f"[TRACE NODE] {nid}")    

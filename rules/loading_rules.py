@@ -26,6 +26,7 @@ class LoadingRules(KnowledgeEngine):
         self.declare(ExpandStarted(node_id=nid))
         self.declare(LoadGenerated(parent_id=nid, flower_type=ft, color=col))
         self.declare(PendingSuccessor(slot=f"load_{ft}_{col}", parent_id=nid))
+        print(f"[LOAD GEN] node={nid}, cargo={ft}-{col}, count={current_count}/{cap}")
 
     @Rule(
         AS.ps << PendingSuccessor(slot=MATCH.slot, parent_id=MATCH.pid),
@@ -42,6 +43,14 @@ class LoadingRules(KnowledgeEngine):
         self.retract(ps)
         self.retract(nc)
         self.declare(NodeCounter(value=v + 1))
-        self.declare(SearchNode(node_id=new_id, parent_id=pid, action=f"load_{ft}_{col}", g_cost=g+1, h_cost=0, f_cost=g+1))
+        self.declare(SearchNode(
+            node_id=new_id,
+            parent_id=pid,
+            action=f"load_{ft}_{col}",
+            g_cost=g + 1,
+            h_cost=0,
+            f_cost=g + 1,
+        ))
         self.declare(RobotState(node_id=new_id, row=r, col=c))
         self.declare(LoadApply(parent_id=pid, child_id=new_id, flower_type=ft, color=col))
+        print(f"[LOAD APPLY] new_id={new_id}, parent={pid}")

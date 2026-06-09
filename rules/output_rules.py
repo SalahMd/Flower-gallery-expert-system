@@ -19,7 +19,8 @@ class OutputRules(KnowledgeEngine):
 
     @Rule(
         GoalNode(node_id=MATCH.nid),
-        SearchNode(node_id=MATCH.nid, parent_id=MATCH.parent, action=MATCH.action, g_cost=MATCH.g, h_cost=MATCH.h, f_cost=MATCH.f),
+        SearchNode(node_id=MATCH.nid, parent_id=MATCH.parent, action=MATCH.action,
+                   g_cost=MATCH.g, h_cost=MATCH.h, f_cost=MATCH.f),
         OutputHeader(name="solution"),
         NOT(OutputNode(name="solution", node_id=MATCH.nid)),
         salience=999,
@@ -31,7 +32,8 @@ class OutputRules(KnowledgeEngine):
 
     @Rule(
         OutputBacktrack(node_id=MATCH.child, parent_id=MATCH.parent),
-        SearchNode(node_id=MATCH.parent, parent_id=MATCH.next_parent, action=MATCH.action, g_cost=MATCH.g, h_cost=MATCH.h, f_cost=MATCH.f),
+        SearchNode(node_id=MATCH.parent, parent_id=MATCH.next_parent, action=MATCH.action,
+                   g_cost=MATCH.g, h_cost=MATCH.h, f_cost=MATCH.f),
         NOT(OutputNode(name="solution", node_id=MATCH.parent)),
         TEST(lambda child, parent: child != parent),
         salience=999,
@@ -55,7 +57,8 @@ class OutputRules(KnowledgeEngine):
 
     @Rule(
         OutputHeader(name="tree"),
-        SearchNode(node_id=MATCH.nid, parent_id=MATCH.parent, action=MATCH.action, g_cost=MATCH.g, h_cost=MATCH.h, f_cost=MATCH.f),
+        SearchNode(node_id=MATCH.nid, parent_id=MATCH.parent, action=MATCH.action,
+                   g_cost=MATCH.g, h_cost=MATCH.h, f_cost=MATCH.f),
         NOT(OutputNode(name="tree", node_id=MATCH.nid)),
         salience=997,
     )

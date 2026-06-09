@@ -12,6 +12,7 @@ from facts.world_facts import PavilionNeed
 
 class UnloadingRules(KnowledgeEngine):
 
+    # robot has the right flower/color and enough quantity -> offer single-color unload
     @Rule(
         Phase(name="expand"),
         CurrentNode(node_id=MATCH.nid),
@@ -28,41 +29,52 @@ class UnloadingRules(KnowledgeEngine):
         self.declare(UnloadColorGenerated(parent_id=nid, pavilion_id=pav, flower_type=ft, color=col))
         self.declare(PendingSuccessor(slot=f"unload_{pav}_{ft}_{col}", parent_id=nid))
 
+    # need not met: missing the item entirely
     @Rule(
-        Phase(name="expand"), CurrentNode(node_id=MATCH.nid),
+        Phase(name="expand"),
+        CurrentNode(node_id=MATCH.nid),
         AtPavilion(node_id=MATCH.nid, pavilion_id=MATCH.pav),
-        PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.needed),
+        PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col),
         NOT(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)),
         NOT(CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col)),
+        NOT(PavilionNeedUnmet(node_id=MATCH.nid, pavilion_id=MATCH.pav)),
         salience=10,
     )
-    def mark_need_unmet_missing(self, nid, pav, ft, col, needed):
+    def mark_need_unmet_missing(self, nid, pav, ft, col):
         self.declare(PavilionNeedUnmet(node_id=nid, pavilion_id=pav))
 
+    # need not met: has item but not enough
     @Rule(
-        Phase(name="expand"), CurrentNode(node_id=MATCH.nid),
+        Phase(name="expand"),
+        CurrentNode(node_id=MATCH.nid),
         AtPavilion(node_id=MATCH.nid, pavilion_id=MATCH.pav),
         PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.needed),
         CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.carried),
         NOT(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)),
         TEST(lambda carried, needed: carried < needed),
+        NOT(PavilionNeedUnmet(node_id=MATCH.nid, pavilion_id=MATCH.pav)),
         salience=10,
     )
     def mark_need_unmet_short(self, nid, pav, ft, col, needed, carried):
         self.declare(PavilionNeedUnmet(node_id=nid, pavilion_id=pav))
 
+    # robot carrying something the pavilion doesn't need
     @Rule(
-        Phase(name="expand"), CurrentNode(node_id=MATCH.nid),
+        Phase(name="expand"),
+        CurrentNode(node_id=MATCH.nid),
         AtPavilion(node_id=MATCH.nid, pavilion_id=MATCH.pav),
-        CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
+        CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col),
         NOT(PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)),
+        NOT(PavilionHasExtraCargo(node_id=MATCH.nid, pavilion_id=MATCH.pav)),
         salience=10,
     )
-    def mark_extra_cargo(self, nid, pav, ft, col, qty):
+    def mark_extra_cargo(self, nid, pav, ft, col):
         self.declare(PavilionHasExtraCargo(node_id=nid, pavilion_id=pav))
 
+    # all needs for this pavilion are met and cargo is clean -> unload whole pavilion
     @Rule(
-        Phase(name="expand"), CurrentNode(node_id=MATCH.nid),
+        Phase(name="expand"),
+        CurrentNode(node_id=MATCH.nid),
         NOT(ExpandVisited(node_id=MATCH.nid)),
         AtPavilion(node_id=MATCH.nid, pavilion_id=MATCH.pav),
         NOT(UnloadPavilionGenerated(parent_id=MATCH.nid, pavilion_id=MATCH.pav)),
@@ -74,6 +86,7 @@ class UnloadingRules(KnowledgeEngine):
         self.declare(ExpandStarted(node_id=nid))
         self.declare(UnloadPavilionGenerated(parent_id=nid, pavilion_id=pav))
         self.declare(PendingSuccessor(slot=f"unload_all_{pav}", parent_id=nid))
+        print(f"[UNLOAD GEN] node={nid}, pavilion={pav}")
 
     @Rule(
         AS.ps << PendingSuccessor(slot=MATCH.slot, parent_id=MATCH.pid),
@@ -87,9 +100,17 @@ class UnloadingRules(KnowledgeEngine):
         self.retract(ps)
         self.retract(nc)
         self.declare(NodeCounter(value=v + 1))
-        self.declare(SearchNode(node_id=new_id, parent_id=pid, action=f"unload_{ft}_{col}_at_{pav}", g_cost=g+1, h_cost=0, f_cost=g+1))
+        self.declare(SearchNode(
+            node_id=new_id,
+            parent_id=pid,
+            action=f"unload_{ft}_{col}_at_{pav}",
+            g_cost=g + 1,
+            h_cost=0,
+            f_cost=g + 1,
+        ))
         self.declare(RobotState(node_id=new_id, row=r, col=c))
         self.declare(UnloadColorApply(parent_id=pid, child_id=new_id, pavilion_id=pav, flower_type=ft, color=col))
+        print(f"[UNLOAD APPLY] new_id={new_id}, parent={pid}")
 
     @Rule(
         AS.ps << PendingSuccessor(slot=MATCH.slot, parent_id=MATCH.pid),
@@ -103,6 +124,14 @@ class UnloadingRules(KnowledgeEngine):
         self.retract(ps)
         self.retract(nc)
         self.declare(NodeCounter(value=v + 1))
-        self.declare(SearchNode(node_id=new_id, parent_id=pid, action=f"unload_all_at_{pav}", g_cost=g+1, h_cost=0, f_cost=g+1))
+        self.declare(SearchNode(
+            node_id=new_id,
+            parent_id=pid,
+            action=f"unload_all_at_{pav}",
+            g_cost=g + 1,
+            h_cost=0,
+            f_cost=g + 1,
+        ))
         self.declare(RobotState(node_id=new_id, row=r, col=c))
         self.declare(UnloadPavilionApply(parent_id=pid, child_id=new_id, pavilion_id=pav))
+        print(f"[UNLOAD APPLY] new_id={new_id}")

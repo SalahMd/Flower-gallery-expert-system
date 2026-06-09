@@ -1,9 +1,9 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH
 from facts.search_facts import (
-    SearchNode, OpenNode, Phase, PendingH, HProcessed,
+    Phase, SearchNode, OpenNode, PendingH, HProcessed,
     UnsatisfiedNeed, Delivered, ClosedNode,
 )
-from facts.robot_facts import RobotState
+from facts.robot_facts import RobotState, AtWarehouse
 from facts.world_facts import PavilionNeed, Pavilion, Warehouse
 
 
@@ -20,6 +20,7 @@ class HeuristicRules(KnowledgeEngine):
     def init_h(self, nid):
         self.declare(PendingH(node_id=nid, value=0))
 
+    # already delivered this need - skip it in heuristic
     @Rule(
         Phase(name="score"),
         SearchNode(node_id=MATCH.nid),
@@ -31,23 +32,25 @@ class HeuristicRules(KnowledgeEngine):
     def skip_delivered_need(self, nid, pav, ft, col):
         self.declare(HProcessed(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
 
+    # undelivered need: add manhattan distance from robot to that pavilion
     @Rule(
         Phase(name="score"),
         AS.ph << PendingH(node_id=MATCH.nid, value=MATCH.current_h),
         RobotState(node_id=MATCH.nid, row=MATCH.rr, col=MATCH.rc),
-        PavilionNeed(pavilion_id=MATCH.pav_id, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
+        PavilionNeed(pavilion_id=MATCH.pav_id, flower_type=MATCH.ft, color=MATCH.col),
         Pavilion(id=MATCH.pav_id, row=MATCH.pr, col=MATCH.pc),
         NOT(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav_id, flower_type=MATCH.ft, color=MATCH.col)),
         NOT(HProcessed(node_id=MATCH.nid, pavilion_id=MATCH.pav_id, flower_type=MATCH.ft, color=MATCH.col)),
         salience=10,
     )
-    def add_need_distance(self, ph, nid, current_h, rr, rc, pav_id, ft, col, qty, pr, pc):
+    def add_need_distance(self, ph, nid, current_h, rr, rc, pav_id, ft, col, pr, pc):
         dist = abs(rr - pr) + abs(rc - pc)
         self.retract(ph)
         self.declare(PendingH(node_id=nid, value=current_h + dist))
         self.declare(HProcessed(node_id=nid, pavilion_id=pav_id, flower_type=ft, color=col))
         self.declare(UnsatisfiedNeed(node_id=nid, pavilion_id=pav_id, flower_type=ft, color=col))
 
+    # all needs satisfied -> h=0, open with f=g
     @Rule(
         Phase(name="score"),
         AS.ph << PendingH(node_id=MATCH.nid, value=MATCH.h_val),
@@ -61,7 +64,26 @@ class HeuristicRules(KnowledgeEngine):
         self.retract(sn)
         self.declare(SearchNode(node_id=nid, parent_id=pid, action=act, g_cost=g, h_cost=0, f_cost=g))
         self.declare(OpenNode(node_id=nid, f_cost=g, g_cost=g))
+        print(f"[H=0] node={nid}")
 
+    # robot already at warehouse and has unsatisfied needs -> just sum pavilion distances
+    @Rule(
+        Phase(name="score"),
+        AS.ph << PendingH(node_id=MATCH.nid, value=MATCH.h_val),
+        AS.sn << SearchNode(node_id=MATCH.nid, g_cost=MATCH.g, parent_id=MATCH.pid, action=MATCH.act),
+        NOT(OpenNode(node_id=MATCH.nid)),
+        UnsatisfiedNeed(node_id=MATCH.nid),
+        AtWarehouse(node_id=MATCH.nid),
+        salience=8,
+    )
+    def h_done_at_warehouse(self, ph, sn, nid, h_val, g, pid, act):
+        self.retract(ph)
+        self.retract(sn)
+        self.declare(SearchNode(node_id=nid, parent_id=pid, action=act, g_cost=g, h_cost=h_val, f_cost=g + h_val))
+        self.declare(OpenNode(node_id=nid, f_cost=g + h_val, g_cost=g))
+        print(f"[H WH] node={nid}, h={h_val}, g={g}, f={g+h_val}")
+
+    # not at warehouse and has unsatisfied needs -> add distance to warehouse on top
     @Rule(
         Phase(name="score"),
         AS.ph << PendingH(node_id=MATCH.nid, value=MATCH.h_val),
@@ -70,6 +92,7 @@ class HeuristicRules(KnowledgeEngine):
         Warehouse(row=MATCH.whr, col=MATCH.whc),
         NOT(OpenNode(node_id=MATCH.nid)),
         UnsatisfiedNeed(node_id=MATCH.nid),
+        NOT(AtWarehouse(node_id=MATCH.nid)),
         salience=8,
     )
     def h_done_with_wh(self, ph, sn, nid, h_val, g, pid, act, rr, rc, whr, whc):
@@ -77,8 +100,9 @@ class HeuristicRules(KnowledgeEngine):
         final_h = h_val + dist_to_wh
         self.retract(ph)
         self.retract(sn)
-        self.declare(SearchNode(node_id=nid, parent_id=pid, action=act, g_cost=g, h_cost=final_h, f_cost=g+final_h))
-        self.declare(OpenNode(node_id=nid, f_cost=g+final_h, g_cost=g))
+        self.declare(SearchNode(node_id=nid, parent_id=pid, action=act, g_cost=g, h_cost=final_h, f_cost=g + final_h))
+        self.declare(OpenNode(node_id=nid, f_cost=g + final_h, g_cost=g))
+        print(f"[H FULL] node={nid}, h={final_h}, g={g}, f={g+final_h}")
 
     @Rule(Phase(name="score"), AS.us << UnsatisfiedNeed(node_id=MATCH.nid), OpenNode(node_id=MATCH.nid), salience=3)
     def cleanup_unsatisfied(self, us, nid):

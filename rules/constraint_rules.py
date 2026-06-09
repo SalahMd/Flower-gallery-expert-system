@@ -12,11 +12,13 @@ class ConstraintRules(KnowledgeEngine):
         CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft2, color=MATCH.col2),
         NOT(OpenNode(node_id=MATCH.nid)),
         NOT(ClosedNode(node_id=MATCH.nid)),
-        TEST(lambda ft1, ft2, col1, col2: ft1 != ft2 and col1 != col2),
+        TEST(lambda ft1, ft2, col1, col2: (ft1, col1) < (ft2, col2) and ft1 != ft2 and col1 != col2),
         NOT(MixedCargo(node_id=MATCH.nid)),
     )
     def flag_mixed_cargo(self, nid, ft1, col1, ft2, col2):
         self.declare(MixedCargo(node_id=nid))
+        print(f"[PRUNE MIXED] node={nid}")
+
 
     @Rule(
         AS.sn << SearchNode(node_id=MATCH.nid),
@@ -27,6 +29,7 @@ class ConstraintRules(KnowledgeEngine):
     )
     def prune_mixed(self, sn, nid):
         self.declare(PruneNode(node_id=nid, reason="mixed"))
+        print(f"[PRUNE MIXED] node={nid}")
         self.retract(sn)
 
     @Rule(
@@ -61,3 +64,4 @@ class ConstraintRules(KnowledgeEngine):
     )
     def flag_valid_cargo(self, nid):
         self.declare(ValidCargo(node_id=nid))
+        print(f"[VALID CARGO] node={nid}")
