@@ -1,9 +1,12 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
-from facts.search_facts import (SearchNode, OpenNode, ClosedNode, ClosedPosSig,
-    CargoSnap, DelSnap, StateReady)
+from facts.search_facts import (
+    SearchNode, OpenNode, ClosedNode, ClosedPosSig,
+    CargoSnap, DelSnap, StateReady, Phase,
+)
 from facts.robot_facts import RobotState
 from facts.cargo_facts import CargoItem, TotalCargoCount
 from facts.search_facts import Delivered
+from facts.constraint_facts import PruneNode
 
 
 class SearchRules(KnowledgeEngine):
@@ -32,6 +35,14 @@ class SearchRules(KnowledgeEngine):
         SearchNode(node_id=MATCH.nid),
         RobotState(node_id=MATCH.nid),
         NOT(StateReady(node_id=MATCH.nid)),
+        NOT(CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)
+            & NOT(CargoSnap(
+                node_id=MATCH.nid,
+                flower_type=MATCH.ft,
+                color=MATCH.col,
+                quantity=MATCH.qty,
+            ))),
+        CargoItem(node_id=MATCH.nid),
         salience=6,
     )
     def mark_state_ready(self, nid):
@@ -51,7 +62,21 @@ class SearchRules(KnowledgeEngine):
         SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
         TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
         StateReady(node_id=MATCH.nid),
-        NOT(ClosedPosSig(row=MATCH.row, col=MATCH.col, cargo_total=MATCH.cnt, node_id=MATCH.nid)),
+        NOT(ClosedPosSig(node_id=MATCH.nid)),
+        NOT(CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)
+            & NOT(CargoSnap(
+                node_id=MATCH.nid,
+                flower_type=MATCH.ft,
+                color=MATCH.col,
+                quantity=MATCH.qty,
+            ))),
+        NOT(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)
+            & NOT(DelSnap(
+                node_id=MATCH.nid,
+                pavilion_id=MATCH.pav,
+                flower_type=MATCH.ft,
+                color=MATCH.col,
+            ))),
         salience=50,
     )
     def record_closed_sig(self, nid, row, col, g, cnt):
@@ -68,7 +93,6 @@ class SearchRules(KnowledgeEngine):
     )
     def keep_better_open(self, on, ob, nid, f_new, f_old):
         self.retract(ob)
-        print(f"[OPEN KEEP] node={nid}, better f={f_new}, worse f={f_old}")
 
     @Rule(
         AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
@@ -80,8 +104,54 @@ class SearchRules(KnowledgeEngine):
     )
     def drop_worse_open_dup(self, on, ob, nid, f_new, f_old):
         self.retract(on)
-        print(f"[OPEN DROP] node={nid}, dropping f={f_new}")
-        
-    @Rule(SearchNode(node_id=MATCH.nid))
-    def trace_all_nodes(self, nid):
-        print(f"[TRACE NODE] {nid}")    
+
+    @Rule(
+        Phase(name="score"),
+        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
+        RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
+        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
+        StateReady(node_id=MATCH.nid),
+        ClosedPosSig(row=MATCH.r, col=MATCH.c, cargo_total=MATCH.cnt, node_id=MATCH.old_id, g_cost=MATCH.old_g),
+        NOT(OpenNode(node_id=MATCH.nid)),
+        NOT(ClosedNode(node_id=MATCH.nid)),
+        NOT(PruneNode(node_id=MATCH.nid)),
+        NOT(CargoSnap(node_id=MATCH.nid) & NOT(CargoSnap(
+            node_id=MATCH.old_id,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+            quantity=MATCH.qty,
+        ))),
+        NOT(CargoSnap(node_id=MATCH.old_id) & NOT(CargoSnap(
+            node_id=MATCH.nid,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+            quantity=MATCH.qty,
+        ))),
+        NOT(DelSnap(node_id=MATCH.nid) & NOT(DelSnap(
+            node_id=MATCH.old_id,
+            pavilion_id=MATCH.pav,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+        ))),
+        NOT(DelSnap(node_id=MATCH.old_id) & NOT(DelSnap(
+            node_id=MATCH.nid,
+            pavilion_id=MATCH.pav,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+        ))),
+        TEST(lambda g, old_g: g >= old_g),
+        salience=36,
+    )
+    def prune_dominated_state(self, nid, g, old_g):
+        self.declare(PruneNode(node_id=nid, reason="dominated"))
+        print(f"[PRUNE DOM] node={nid}, g={g} >= old_g={old_g}")
+
+    @Rule(
+        AS.sn << SearchNode(node_id=MATCH.nid),
+        PruneNode(node_id=MATCH.nid, reason="dominated"),
+        NOT(OpenNode(node_id=MATCH.nid)),
+        NOT(ClosedNode(node_id=MATCH.nid)),
+        salience=40,
+    )
+    def drop_dominated_node(self, sn, nid):
+        self.retract(sn)

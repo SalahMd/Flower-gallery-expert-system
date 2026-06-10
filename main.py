@@ -5,7 +5,9 @@ from astar.astar_engine import AStarEngine
 def main():
     initial_facts = build_initial_facts()
     engine = AStarEngine()
-    engine.run_astar(initial_facts, max_steps=50000)
+    goal_id, steps = engine.run_astar(initial_facts, max_steps=200000)
+    if not goal_id:
+        print("No solution found within step limit.")
 
 
 main()

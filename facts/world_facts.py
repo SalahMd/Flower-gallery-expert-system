@@ -2,71 +2,71 @@ from experta import Fact, Field
 
 
 class Grid(Fact):
-    rows = Field(int)
-    cols = Field(int)
+    rows = Field(int, mandatory=True)
+    cols = Field(int, mandatory=True)
 
 
 class Cell(Fact):
-    row = Field(int)
-    col = Field(int)
+    row = Field(int, mandatory=True)
+    col = Field(int, mandatory=True)
 
 
 class NeighborCell(Fact):
-    row = Field(int)
-    col = Field(int)
-    direction = Field(str)
-    next_row = Field(int)
-    next_col = Field(int)
+    from_row = Field(int, mandatory=True)
+    from_col = Field(int, mandatory=True)
+    direction = Field(str, mandatory=True)
+    to_row = Field(int, mandatory=True)
+    to_col = Field(int, mandatory=True)
 
 
 class Warehouse(Fact):
-    row = Field(int)
-    col = Field(int)
+    row = Field(int, mandatory=True)
+    col = Field(int, mandatory=True)
 
 
 class WarehouseStock(Fact):
-    flower_type = Field(str)
-    color = Field(str)
+    flower_type = Field(str, mandatory=True)
+    color = Field(str, mandatory=True)
 
 
 class Pavilion(Fact):
-    id = Field(str)
-    row = Field(int)
-    col = Field(int)
+    id = Field(str, mandatory=True)
+    row = Field(int, mandatory=True)
+    col = Field(int, mandatory=True)
 
 
 class FlowerKind(Fact):
-    flower_type = Field(str)
+    name = Field(str, mandatory=True)
 
 
 class FlowerColor(Fact):
-    color = Field(str)
+    name = Field(str, mandatory=True)
 
 
 class Bouquet(Fact):
-    flower_type = Field(str)
-    color = Field(str)
+    flower_type = Field(str, mandatory=True)
+    color = Field(str, mandatory=True)
 
 
 class PavilionNeed(Fact):
-    pavilion_id = Field(str)
-    flower_type = Field(str)
-    color = Field(str)
-    quantity = Field(int)
+    pavilion_id = Field(str, mandatory=True)
+    flower_type = Field(str, mandatory=True)
+    color = Field(str, mandatory=True)
+    quantity = Field(int, mandatory=True)
 
 
 class PavilionBouquetTotal(Fact):
-    pavilion_id = Field(str)
-    total = Field(int)
+    pavilion_id = Field(str, mandatory=True)
+    total = Field(int, mandatory=True)
 
 
 class PavilionColorNeedTotal(Fact):
-    pavilion_id = Field(str)
-    color = Field(str)
-    total = Field(int)
+    pavilion_id = Field(str, mandatory=True)
+    color = Field(str, mandatory=True)
+    total = Field(int, mandatory=True)
 
 
 class PavilionFlowerNeedTotal(Fact):
-    pavilion_id = Field(str)
-    flower_type = Field(str)
-    total = Field(int)
+    pavilion_id = Field(str, mandatory=True)
+    flower_type = Field(str, mandatory=True)
+    total = Field(int, mandatory=True)

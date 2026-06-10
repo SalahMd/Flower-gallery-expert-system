@@ -103,6 +103,22 @@ class UnloadPavilionGenerated(Fact):
     parent_id = Field(str)
     pavilion_id = Field(str)
 
+class NeedUnmet(Fact):
+    node_id = Field(str, mandatory=True)
+    pavilion_id = Field(str, mandatory=True)
+    flower_type = Field(str, mandatory=True)
+    color = Field(str, mandatory=True)
+
+
+class NeedUnmetChecked(Fact):
+    node_id = Field(str, mandatory=True)
+    pavilion_id = Field(str, mandatory=True)
+    flower_type = Field(str, mandatory=True)
+    color = Field(str, mandatory=True)
+
+
+class GoalCheckDone(Fact):
+    node_id = Field(str, mandatory=True)
 
 class PendingH(Fact):
     node_id = Field(str)
@@ -126,6 +142,12 @@ class UnsatisfiedNeed(Fact):
 class NotBest(Fact):
     node_id = Field(str)
     eliminated_by = Field(str)
+
+
+class BestOpen(Fact):
+    node_id = Field(str)
+    f_cost = Field(int)
+    g_cost = Field(int)
 
 
 class StateCopy(Fact):
@@ -153,6 +175,8 @@ class UnloadPavilionApply(Fact):
     child_id = Field(str)
     pavilion_id = Field(str)
 
+class NodePrinted(Fact):
+    node_id = Field(str, mandatory=True)
 
 class GoalBlocked(Fact):
     node_id = Field(str)
@@ -219,3 +243,9 @@ class DelSnap(Fact):
 
 class StateReady(Fact):
     node_id = Field(str)
+
+
+class LoadBlocked(Fact):
+    parent_id = Field(str)
+    flower_type = Field(str)
+    color = Field(str)
