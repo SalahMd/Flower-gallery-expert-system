@@ -27,23 +27,30 @@ class AStarEngine(
     KnowledgeEngine,
 ):
     @Rule(
-        Phase(name="select"),
-        OpenNode(node_id=MATCH.nid, f_cost=MATCH.f, g_cost=MATCH.g),
-        NOT(BestOpen()),
-        salience=25,
-    )
-    def first_best_open(self, nid, f, g):
+    Phase(name="select"),
+    OpenNode(node_id=MATCH.nid, f_cost=MATCH.f, g_cost=MATCH.g),
+    SearchStrategy(name=MATCH.strategy),
+    NOT(BestOpen()),
+    salience=25,
+)
+    def first_best_open(self, nid, f, g, strategy):
         self.declare(BestOpen(node_id=nid, f_cost=f, g_cost=g))
 
     @Rule(
         Phase(name="select"),
         OpenNode(node_id=MATCH.nid, f_cost=MATCH.f, g_cost=MATCH.g),
         AS.bo << BestOpen(node_id=MATCH.bid, f_cost=MATCH.bf, g_cost=MATCH.bg),
-        TEST(lambda nid, bid, f, bf, g, bg:
-             nid != bid and (f < bf or (f == bf and g < bg))),
+        SearchStrategy(name=MATCH.strategy),
+        TEST(lambda nid, bid, f, bf, g, bg, strategy: (
+            nid != bid and (
+                (strategy == "dfs" and (g > bg or (g == bg and f < bf)))
+                or
+                (strategy == "astar" and (f < bf or (f == bf and g > bg)))
+            )
+        )),
         salience=24,
     )
-    def improve_best_open(self, nid, f, g, bo, bid, bf, bg):
+    def improve_best_open(self, nid, f, g, bo, bid, bf, bg, strategy):
         self.retract(bo)
         self.declare(BestOpen(node_id=nid, f_cost=f, g_cost=g))
 
@@ -324,12 +331,12 @@ class AStarEngine(
                 return True
         return False
 
-    def run_astar(self, initial_facts, max_depth=50, max_steps=500000):
+    def run_astar(self, initial_facts, max_depth=50, max_steps=500000, strategy="astar"):
         self.reset()
         self.declare(*initial_facts)
         self.declare(Phase(name="select"))
         self.declare(MaxDepth(depth=max_depth))
-        self._max_depth = max_depth  # store so rules can read it
+        self.declare(SearchStrategy(name=strategy))
         used = 0
         chunk = 100
         while used < max_steps:

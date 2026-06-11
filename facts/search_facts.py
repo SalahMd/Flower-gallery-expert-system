@@ -130,6 +130,8 @@ class UnloadColorGenerated(Fact):
 class UnloadPavilionGenerated(Fact):
     parent_id = Field(str)
     pavilion_id = Field(str)
+class SearchStrategy(Fact):
+    name = Field(str, mandatory=True)
 
 class NeedUnmet(Fact):
     node_id = Field(str, mandatory=True)
