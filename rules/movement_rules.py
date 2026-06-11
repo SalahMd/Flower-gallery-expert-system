@@ -8,7 +8,6 @@ from facts.robot_facts import AtWarehouse, AtPavilion
 
 class MovementRules:
 
-# Robot is empty → only moves that bring it closer to the warehouse are valid
     @Rule(
         Phase(name="expand"),
         CurrentNode(node_id=MATCH.nid),
@@ -28,7 +27,6 @@ class MovementRules:
         self.declare(MoveGenerated(parent_id=nid, direction=d))
         self.declare(PendingSuccessor(slot=f"move_{d}", parent_id=nid))
 
-    # Robot has cargo → only moves toward a pavilion that needs what it carries
     @Rule(
         Phase(name="expand"),
         CurrentNode(node_id=MATCH.nid),

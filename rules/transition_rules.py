@@ -7,7 +7,6 @@ from facts.world_facts import *
 
 class TransitionRules(KnowledgeEngine):
 
-    # --- StateCopy (move action) ---
 
     @Rule(
         StateCopy(parent_id=MATCH.pid, child_id=MATCH.cid),

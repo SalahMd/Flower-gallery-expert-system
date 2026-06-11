@@ -7,10 +7,6 @@ from facts.constraint_facts import PruneNode
 
 class SearchRules(KnowledgeEngine):
 
-    # ------------------------------------------------------------------ #
-    #  Signature accumulation — build StateSig one item at a time        #
-    # ------------------------------------------------------------------ #
-
     @Rule(
         Phase(name="score"),
         SearchNode(node_id=MATCH.nid),
@@ -95,10 +91,6 @@ class SearchRules(KnowledgeEngine):
     def cleanup_sig_delivered_item(self, sdi, nid):
         self.retract(sdi)
 
-    # ------------------------------------------------------------------ #
-    #  Domination pruning — prune if closed node has same state at       #
-    #  equal or lower cost                                                #
-    # ------------------------------------------------------------------ #
 
     @Rule(
         Phase(name="score"),
@@ -153,9 +145,6 @@ class SearchRules(KnowledgeEngine):
     def replace_worse_open(self, nid, on, old_id):
         self.retract(on)
 
-    # ------------------------------------------------------------------ #
-    #  Record closed signature for future domination checks              #
-    # ------------------------------------------------------------------ #
 
     @Rule(
         Phase(name="score"),
@@ -172,10 +161,6 @@ class SearchRules(KnowledgeEngine):
             cargo=cargo, delivered=delivered,
         ))
 
-    # ------------------------------------------------------------------ #
-    #  Open-list dedup — keep only best (lowest f then g) per node       #
-    # ------------------------------------------------------------------ #
-
     @Rule(
         AS.worse << OpenNode(node_id=MATCH.nid, f_cost=MATCH.fw, g_cost=MATCH.gw),
         OpenNode(node_id=MATCH.nid, f_cost=MATCH.fb, g_cost=MATCH.gb),
@@ -186,9 +171,6 @@ class SearchRules(KnowledgeEngine):
     def drop_worse_open(self, worse, nid):
         self.retract(worse)
 
-    # ------------------------------------------------------------------ #
-    #  Drop pruned nodes from the search graph                           #
-    # ------------------------------------------------------------------ #
 
     @Rule(
         AS.sn << SearchNode(node_id=MATCH.nid),

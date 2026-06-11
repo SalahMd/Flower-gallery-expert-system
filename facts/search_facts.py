@@ -17,8 +17,8 @@ class OpenNode(Fact):
 
 class StateSig(Fact):
     node_id   = Field(str, mandatory=True)
-    cargo     = Field(str, mandatory=True)     # serialized signature string
-    delivered = Field(str, mandatory=True)     # serialized signature string
+    cargo     = Field(str, mandatory=True)
+    delivered = Field(str, mandatory=True)
 
 class ClosedPosSig(Fact):
     node_id   = Field(str, mandatory=True)
