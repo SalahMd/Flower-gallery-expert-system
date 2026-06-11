@@ -1,9 +1,5 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH
-from facts.search_facts import (
-    SearchNode, GoalNode, SearchStopped, NodePrinted, OutputBacktrack,
-)
-
-
+from facts.search_facts import *
 class OutputRules(KnowledgeEngine):
 
     @Rule(

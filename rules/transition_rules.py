@@ -1,11 +1,8 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
-from facts.search_facts import (
-    StateCopy, LoadApply, UnloadColorApply, UnloadPavilionApply, Delivered,
-    PendingCargoTotal, CargoLineCounted, PavilionHasExtraCargo,
-)
+from facts.search_facts import *
 from facts.robot_facts import RobotState, AtWarehouse, AtPavilion
 from facts.cargo_facts import CargoItem, TotalCargoCount
-from facts.world_facts import Warehouse, Pavilion, PavilionNeed, PavilionBouquetTotal
+from facts.world_facts import *
 
 
 class TransitionRules(KnowledgeEngine):

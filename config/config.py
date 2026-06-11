@@ -1,16 +1,13 @@
-GRID_ROWS = 5
-GRID_COLS = 5
+GRID_ROWS = 3
+GRID_COLS = 3
 
 WAREHOUSE_POS = (1, 2)
-
 ROBOT_START = (0, 2)
 
 PAVILIONS = {
-    "p1": (3, 1),
-    "p2": (2, 3),
-    "p3": (4, 3),
-    "p4": (1, 4),
-
+    "p1": (0, 0),
+    "p2": (1, 0),
+    "p3": (2, 0),
 }
 
 PAVILION_NEEDS = {
@@ -20,17 +17,14 @@ PAVILION_NEEDS = {
         ("rose", "white", 1),
     ],
     "p2": [
-        ("tulip", "yellow", 1,),
-        ("tulip", "red", 3,),
+        ("tulip", "yellow", 1),
+        ("tulip", "red", 3),
     ],
     "p3": [
         ("orchid", "purple", 2),
         ("orchid", "pink", 1),
     ],
-    "p4": [
-        ("juliet", "gold", 2),
-        ("juliet", "pink", 2),
-    ]
+    
 }
 
 WAREHOUSE_STOCK = [
@@ -42,6 +36,6 @@ WAREHOUSE_STOCK = [
     ("lily", "white"),
     ("juliet", "gold"),
     ("juliet", "pink"),
-    ('orchid', 'purple'),
-    ('orchid', 'pink'),
+    ("orchid", "purple"),
+    ("orchid", "pink"),
 ]

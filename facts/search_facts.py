@@ -15,6 +15,34 @@ class OpenNode(Fact):
     f_cost = Field(int)
     g_cost = Field(int)
 
+class StateSig(Fact):
+    node_id   = Field(str, mandatory=True)
+    cargo     = Field(str, mandatory=True)     # serialized signature string
+    delivered = Field(str, mandatory=True)     # serialized signature string
+
+class ClosedPosSig(Fact):
+    node_id   = Field(str, mandatory=True)
+    row       = Field(int, mandatory=True)
+    col       = Field(int, mandatory=True)
+    g_cost    = Field(int, mandatory=True)
+    cargo     = Field(str, mandatory=True)
+    delivered = Field(str, mandatory=True)
+class SigAccum(Fact):
+    node_id   = Field(str, mandatory=True)
+    cargo     = Field(str, mandatory=True)
+    delivered = Field(str, mandatory=True)
+
+class SigCargoItem(Fact):
+    node_id     = Field(str, mandatory=True)
+    flower_type = Field(str, mandatory=True)
+    color       = Field(str, mandatory=True)
+    quantity    = Field(int, mandatory=True)
+
+class SigDeliveredItem(Fact):
+    node_id     = Field(str, mandatory=True)
+    pavilion_id = Field(str, mandatory=True)
+    flower_type = Field(str, mandatory=True)
+    color       = Field(str, mandatory=True)
 
 class ClosedNode(Fact):
     node_id = Field(str)
@@ -149,6 +177,9 @@ class BestOpen(Fact):
     f_cost = Field(int)
     g_cost = Field(int)
 
+class MaxDepth(Fact):
+    depth = Field(int, mandatory=True)
+
 
 class StateCopy(Fact):
     parent_id = Field(str)
@@ -219,7 +250,10 @@ class CargoLineCounted(Fact):
     color = Field(str)
 
 
-class ClosedPosSig(Fact):
+
+
+
+class OpenPosSig(Fact):
     row = Field(int)
     col = Field(int)
     cargo_total = Field(int)
@@ -245,7 +279,15 @@ class StateReady(Fact):
     node_id = Field(str)
 
 
+class SigReady(Fact):
+    node_id = Field(str)
+
+
 class LoadBlocked(Fact):
     parent_id = Field(str)
     flower_type = Field(str)
     color = Field(str)
+
+
+class ClosedCleanup(Fact):
+    node_id = Field(str)

@@ -1,4 +1,6 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
+import engine
+from facts.constraint_facts import PruneNode
 from facts.search_facts import *
 from rules.movement_rules import MovementRules
 from rules.loading_rules import LoadingRules
@@ -9,6 +11,7 @@ from rules.heuristic_rules import HeuristicRules
 from rules.goal_rules import GoalRules
 from rules.output_rules import OutputRules
 from rules.search_rules import SearchRules
+from utils.score_node import ScoredNode
 
 
 class AStarEngine(
@@ -23,14 +26,13 @@ class AStarEngine(
     OutputRules,
     KnowledgeEngine,
 ):
-
     @Rule(
         Phase(name="select"),
         OpenNode(node_id=MATCH.nid, f_cost=MATCH.f, g_cost=MATCH.g),
         NOT(BestOpen()),
         salience=25,
     )
-    def seed_best_open(self, nid, f, g):
+    def first_best_open(self, nid, f, g):
         self.declare(BestOpen(node_id=nid, f_cost=f, g_cost=g))
 
     @Rule(
@@ -59,7 +61,7 @@ class AStarEngine(
         self.declare(ClosedNode(node_id=nid))
         self.declare(CurrentNode(node_id=nid))
         self.declare(Phase(name="check_goal"))
-        print(f"[SELECT] best node={nid}, f={f}, g={g}")
+        print(f"best node={nid}, f={f}, g={g}")
 
     @Rule(AS.bo << BestOpen(), NOT(Phase(name="select")), salience=1)
     def cleanup_best_open(self, bo):
@@ -73,7 +75,7 @@ class AStarEngine(
     )
     def stop_when_open_empty(self, ph):
         self.retract(ph)
-        print("[SEARCH] open list exhausted - no solution found")
+        print("open list exhausted - no solution found")
 
     @Rule(
         AS.ph << Phase(name="check_goal"),
@@ -82,8 +84,6 @@ class AStarEngine(
     )
     def goal_reached_halt(self, ph, nid):
         self.retract(ph)
-
-    # --- expansion cleanup triggers ---
 
     @Rule(
         Phase(name="expand"),
@@ -161,23 +161,43 @@ class AStarEngine(
         self.declare(ExpandCleanup(parent_id=nid))
         self.declare(ExpandVisited(node_id=nid))
 
-    @Rule(AS.m << MoveGenerated(parent_id=MATCH.nid), ExpandCleanup(parent_id=MATCH.nid), salience=10)
+    @Rule(
+        AS.m << MoveGenerated(parent_id=MATCH.nid),
+        ExpandCleanup(parent_id=MATCH.nid),
+        salience=10,
+    )
     def cleanup_move_marker(self, m, nid):
         self.retract(m)
 
-    @Rule(AS.lg << LoadGenerated(parent_id=MATCH.nid), ExpandCleanup(parent_id=MATCH.nid), salience=10)
+    @Rule(
+        AS.lg << LoadGenerated(parent_id=MATCH.nid),
+        ExpandCleanup(parent_id=MATCH.nid),
+        salience=10,
+    )
     def cleanup_load_marker(self, lg, nid):
         self.retract(lg)
 
-    @Rule(AS.uc << UnloadColorGenerated(parent_id=MATCH.nid), ExpandCleanup(parent_id=MATCH.nid), salience=10)
+    @Rule(
+        AS.uc << UnloadColorGenerated(parent_id=MATCH.nid),
+        ExpandCleanup(parent_id=MATCH.nid),
+        salience=10,
+    )
     def cleanup_unload_color_marker(self, uc, nid):
         self.retract(uc)
 
-    @Rule(AS.up << UnloadPavilionGenerated(parent_id=MATCH.nid), ExpandCleanup(parent_id=MATCH.nid), salience=10)
+    @Rule(
+        AS.up << UnloadPavilionGenerated(parent_id=MATCH.nid),
+        ExpandCleanup(parent_id=MATCH.nid),
+        salience=10,
+    )
     def cleanup_unload_pav_marker(self, up, nid):
         self.retract(up)
 
-    @Rule(AS.es << ExpandStarted(node_id=MATCH.nid), ExpandCleanup(parent_id=MATCH.nid), salience=10)
+    @Rule(
+        AS.es << ExpandStarted(node_id=MATCH.nid),
+        ExpandCleanup(parent_id=MATCH.nid),
+        salience=10,
+    )
     def cleanup_expand_started(self, es, nid):
         self.retract(es)
 
@@ -196,43 +216,54 @@ class AStarEngine(
         self.retract(ph)
         self.retract(cn)
         self.declare(Phase(name="score"))
-        print(f"[PHASE] expand -> score, node={nid}")
-
-    # --- NeedScore tracking ---
+        print(f"expand -> score, node={nid}")
 
     @Rule(
         Phase(name="score"),
-        SearchNode(node_id=MATCH.nid),
+        AS.sn << SearchNode(
+            node_id=MATCH.nid,
+            parent_id=MATCH.pid,
+            action=MATCH.act,
+            g_cost=MATCH.g,
+        ),
         StateReady(node_id=MATCH.nid),
         NOT(OpenNode(node_id=MATCH.nid)),
         NOT(ClosedNode(node_id=MATCH.nid)),
-        NOT(NeedScore(node_id=MATCH.nid)),
+        NOT(PruneNode(node_id=MATCH.nid)),
+        NOT(ScoredNode(node_id=MATCH.nid)),
         salience=110,
     )
-    def flag_need_score(self, nid):
-        self.declare(NeedScore(node_id=nid))
+    def score_node(self, sn, nid, pid, act, g):
+        h = self.compute_h(nid)
+        f = g + h
+        self.retract(sn)
+        self.declare(ScoredNode(node_id=nid))
+        self.declare(SearchNode(
+            node_id=nid, parent_id=pid, action=act,
+            g_cost=g, h_cost=h, f_cost=f,
+        ))
+        self.declare(OpenNode(node_id=nid, f_cost=f, g_cost=g))
+        print(f"{nid} g={g} h={h} f={f}")
 
-    @Rule(AS.ns << NeedScore(node_id=MATCH.nid), OpenNode(node_id=MATCH.nid), salience=60)
-    def need_score_done(self, ns, nid):
-        self.retract(ns)
-
-    @Rule(AS.ns << NeedScore(node_id=MATCH.nid), NOT(SearchNode(node_id=MATCH.nid)), salience=70)
-    def need_score_orphan_cleanup(self, ns, nid):
-        self.retract(ns)
+    @Rule(
+        AS.sc << ScoredNode(node_id=MATCH.nid),
+        OpenNode(node_id=MATCH.nid),
+        salience=60,
+    )
+    def cleanup_scored_node(self, sc, nid):
+        self.retract(sc)
 
     @Rule(
         AS.ph << Phase(name="score"),
-        NOT(PendingH()),
-        NOT(NeedScore()),
+        NOT(ScoredNode()),
+        NOT(PruneNode()),  
         NOT(GoalNode()),
         salience=5,
     )
     def scoring_done(self, ph):
         self.retract(ph)
         self.declare(Phase(name="select"))
-        print("[PHASE] score -> select")
 
-    # cleanup goal-check helper facts after check_goal phase ends
     @Rule(
         AS.gcd << GoalCheckDone(node_id=MATCH.nid),
         NOT(Phase(name="check_goal")),
@@ -258,17 +289,34 @@ class AStarEngine(
     def cleanup_stale_need_unmet_checked(self, pnc, nid):
         self.retract(pnc)
 
+
     @Rule(GoalNode(), NOT(SearchStopped()), salience=1000)
     def mark_search_done(self):
         self.declare(SearchStopped(max_steps=0))
 
-    @Rule(GoalNode(), Phase(name=MATCH.p), salience=500)
-    def halt_on_goal(self, p):
-        self.retract(p)
+    @Rule(GoalNode(), AS.ph << Phase(name=MATCH.p), salience=500)
+    def halt_on_goal(self, ph, p):
+        self.retract(ph)
+    @Rule(
+        Phase(name="score"),
+        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
+        MaxDepth(depth=MATCH.max_d),
+        StateReady(node_id=MATCH.nid),
+        NOT(OpenNode(node_id=MATCH.nid)),
+        NOT(ClosedNode(node_id=MATCH.nid)),
+        NOT(PruneNode(node_id=MATCH.nid)),
+        NOT(ScoredNode(node_id=MATCH.nid)),
+        TEST(lambda g, max_d: g > max_d),
+        salience=120,
+    )
+    def prune_deep_node(self, nid, g, max_d):
+        self.declare(PruneNode(node_id=nid))
+        print(f"{nid} exceeds max_depth (g={g} > max_d={max_d})")
+    @Rule(SearchStopped(), AS.ph << Phase(name=MATCH.p), salience=500)
+        
+    def halt_on_stop(self, ph, p):
+        self.retract(ph)
 
-    @Rule(SearchStopped(), Phase(name=MATCH.p), salience=500)
-    def halt_on_stop(self, p):
-        self.retract(p)
 
     def _has_fact(self, name):
         for f in self.facts.values():
@@ -276,16 +324,17 @@ class AStarEngine(
                 return True
         return False
 
-    def run_astar(self, initial_facts, max_steps=500000):
+    def run_astar(self, initial_facts, max_depth=50, max_steps=500000):
         self.reset()
         self.declare(*initial_facts)
         self.declare(Phase(name="select"))
-        print("[SEARCH] A* started")
+        self.declare(MaxDepth(depth=max_depth))
+        self._max_depth = max_depth  # store so rules can read it
         used = 0
-        chunk = 500
+        chunk = 100
         while used < max_steps:
             self.run(chunk)
-            used = used + chunk
+            used += chunk
             if self._has_fact("GoalNode") or self._has_fact("SearchStopped"):
                 break
         if not self._has_fact("SearchStopped"):
@@ -297,7 +346,7 @@ class AStarEngine(
                 break
         self.run(500)
         if goal_id:
-            print(f"[SEARCH] finished, goal={goal_id}, steps={used}")
+            print(f"GOAL FOUND: {goal_id}  steps={used}")
         else:
-            print(f"[SEARCH] finished, no goal, steps={used}")
+            print(f"NO GOAL  steps={used}")
         return goal_id, used

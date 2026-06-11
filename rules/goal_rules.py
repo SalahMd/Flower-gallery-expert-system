@@ -1,8 +1,5 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH
-from facts.search_facts import (
-    Phase, CurrentNode, GoalNode,
-    NeedUnmet, NeedUnmetChecked, GoalCheckDone, Delivered,
-)
+from facts.search_facts import *
 from facts.world_facts import PavilionNeed
 
 
@@ -19,7 +16,6 @@ class GoalRules(KnowledgeEngine):
     def mark_need_unmet(self, nid, pav, ft, col):
         self.declare(NeedUnmet(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
         self.declare(NeedUnmetChecked(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
-        print(f"[GOAL CHECK] node={nid}, unmet={pav} {ft}-{col}")
 
     @Rule(
         Phase(name="check_goal"),
@@ -32,7 +28,6 @@ class GoalRules(KnowledgeEngine):
     def mark_need_met(self, nid, pav, ft, col):
         self.declare(NeedUnmetChecked(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
 
-    # all needs checked, none unmet -> goal
     @Rule(
         AS.ph << Phase(name="check_goal"),
         CurrentNode(node_id=MATCH.nid),
@@ -53,7 +48,6 @@ class GoalRules(KnowledgeEngine):
         self.retract(ph)
         print(f"GOAL FOUND: {nid}")
 
-    # at least one need unmet -> expand
     @Rule(
         AS.ph << Phase(name="check_goal"),
         CurrentNode(node_id=MATCH.nid),
@@ -65,7 +59,6 @@ class GoalRules(KnowledgeEngine):
         self.declare(GoalCheckDone(node_id=nid))
         self.retract(ph)
         self.declare(Phase(name="expand"))
-        print(f"[PHASE] check_goal -> expand, node={nid}")
 
     @Rule(AS.nu << NeedUnmet(node_id=MATCH.nid), GoalCheckDone(node_id=MATCH.nid), salience=2)
     def cleanup_need_unmet(self, nu, nid):

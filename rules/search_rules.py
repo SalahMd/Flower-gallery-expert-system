@@ -1,157 +1,201 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
-from facts.search_facts import (
-    SearchNode, OpenNode, ClosedNode, ClosedPosSig,
-    CargoSnap, DelSnap, StateReady, Phase,
-)
+from facts.search_facts import *
 from facts.robot_facts import RobotState
 from facts.cargo_facts import CargoItem, TotalCargoCount
-from facts.search_facts import Delivered
 from facts.constraint_facts import PruneNode
 
 
 class SearchRules(KnowledgeEngine):
 
-    @Rule(
-        SearchNode(node_id=MATCH.nid),
-        CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty),
-        NOT(CargoSnap(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)),
-        salience=5,
-    )
-    def snap_cargo(self, nid, ft, col, qty):
-        self.declare(CargoSnap(node_id=nid, flower_type=ft, color=col, quantity=qty))
+    # ------------------------------------------------------------------ #
+    #  Signature accumulation — build StateSig one item at a time        #
+    # ------------------------------------------------------------------ #
 
     @Rule(
+        Phase(name="score"),
         SearchNode(node_id=MATCH.nid),
         RobotState(node_id=MATCH.nid),
-        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
-        NOT(CargoItem(node_id=MATCH.nid)),
-        NOT(StateReady(node_id=MATCH.nid)),
-        salience=5,
+        NOT(StateSig(node_id=MATCH.nid)),
+        NOT(SigAccum(node_id=MATCH.nid)),
+        salience=15,
     )
-    def snap_empty_ready(self, nid, cnt):
+    def start_sig_accum(self, nid):
+        self.declare(SigAccum(node_id=nid, cargo="", delivered=""))
+
+    @Rule(
+        Phase(name="score"),
+        AS.acc << SigAccum(node_id=MATCH.nid, cargo=MATCH.c, delivered=MATCH.d),
+        CargoItem(
+            node_id=MATCH.nid,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+            quantity=MATCH.qty,
+        ),
+        NOT(SigCargoItem(
+            node_id=MATCH.nid,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+            quantity=MATCH.qty,
+        )),
+        NOT(StateSig(node_id=MATCH.nid)),
+        salience=14,
+    )
+    def accum_cargo_item(self, acc, nid, c, d, ft, col, qty):
+        self.retract(acc)
+        self.declare(SigAccum(node_id=nid, cargo=c + f"|{ft},{col},{qty}", delivered=d))
+        self.declare(SigCargoItem(node_id=nid, flower_type=ft, color=col, quantity=qty))
+
+    @Rule(
+        Phase(name="score"),
+        AS.acc << SigAccum(node_id=MATCH.nid, cargo=MATCH.c, delivered=MATCH.d),
+        Delivered(
+            node_id=MATCH.nid,
+            pavilion_id=MATCH.pav,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+        ),
+        NOT(SigDeliveredItem(
+            node_id=MATCH.nid,
+            pavilion_id=MATCH.pav,
+            flower_type=MATCH.ft,
+            color=MATCH.col,
+        )),
+        NOT(StateSig(node_id=MATCH.nid)),
+        salience=14,
+    )
+    def accum_delivered_item(self, acc, nid, c, d, pav, ft, col):
+        self.retract(acc)
+        self.declare(SigAccum(node_id=nid, cargo=c, delivered=d + f"|{pav},{ft},{col}"))
+        self.declare(SigDeliveredItem(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
+
+    @Rule(
+        Phase(name="score"),
+        AS.acc << SigAccum(node_id=MATCH.nid, cargo=MATCH.c, delivered=MATCH.d),
+        NOT(StateSig(node_id=MATCH.nid)),
+        salience=13,
+    )
+    def finalize_sig(self, acc, nid, c, d):
+        self.retract(acc)
+        self.declare(StateSig(node_id=nid, cargo=c, delivered=d))
         self.declare(StateReady(node_id=nid))
 
     @Rule(
-        SearchNode(node_id=MATCH.nid),
-        RobotState(node_id=MATCH.nid),
-        NOT(StateReady(node_id=MATCH.nid)),
-        NOT(CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)
-            & NOT(CargoSnap(
-                node_id=MATCH.nid,
-                flower_type=MATCH.ft,
-                color=MATCH.col,
-                quantity=MATCH.qty,
-            ))),
-        CargoItem(node_id=MATCH.nid),
-        salience=6,
+        AS.sci << SigCargoItem(node_id=MATCH.nid),
+        StateSig(node_id=MATCH.nid),
+        salience=12,
     )
-    def mark_state_ready(self, nid):
-        self.declare(StateReady(node_id=nid))
+    def cleanup_sig_cargo_item(self, sci, nid):
+        self.retract(sci)
 
     @Rule(
-        Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col),
-        NOT(DelSnap(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)),
-        salience=5,
+        AS.sdi << SigDeliveredItem(node_id=MATCH.nid),
+        StateSig(node_id=MATCH.nid),
+        salience=12,
     )
-    def snap_delivered(self, nid, pav, ft, col):
-        self.declare(DelSnap(node_id=nid, pavilion_id=pav, flower_type=ft, color=col))
+    def cleanup_sig_delivered_item(self, sdi, nid):
+        self.retract(sdi)
 
-    @Rule(
-        ClosedNode(node_id=MATCH.nid),
-        RobotState(node_id=MATCH.nid, row=MATCH.row, col=MATCH.col),
-        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
-        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
-        StateReady(node_id=MATCH.nid),
-        NOT(ClosedPosSig(node_id=MATCH.nid)),
-        NOT(CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col, quantity=MATCH.qty)
-            & NOT(CargoSnap(
-                node_id=MATCH.nid,
-                flower_type=MATCH.ft,
-                color=MATCH.col,
-                quantity=MATCH.qty,
-            ))),
-        NOT(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col)
-            & NOT(DelSnap(
-                node_id=MATCH.nid,
-                pavilion_id=MATCH.pav,
-                flower_type=MATCH.ft,
-                color=MATCH.col,
-            ))),
-        salience=50,
-    )
-    def record_closed_sig(self, nid, row, col, g, cnt):
-        self.declare(ClosedPosSig(row=row, col=col, cargo_total=cnt, node_id=nid, g_cost=g))
-
-    # keep the open entry with the better (lower) f/g, drop the worse one
-    @Rule(
-        AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
-        AS.ob << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_old, g_cost=MATCH.g_old),
-        TEST(lambda f_new, f_old, g_new, g_old:
-             (f_new, g_new) != (f_old, g_old) and
-             (f_new < f_old or (f_new == f_old and g_new < g_old))),
-        salience=80,
-    )
-    def keep_better_open(self, on, ob, nid, f_new, f_old):
-        self.retract(ob)
-
-    @Rule(
-        AS.on << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_new, g_cost=MATCH.g_new),
-        AS.ob << OpenNode(node_id=MATCH.nid, f_cost=MATCH.f_old, g_cost=MATCH.g_old),
-        TEST(lambda f_new, f_old, g_new, g_old:
-             (f_new, g_new) != (f_old, g_old) and
-             (f_new > f_old or (f_new == f_old and g_new > g_old))),
-        salience=80,
-    )
-    def drop_worse_open_dup(self, on, ob, nid, f_new, f_old):
-        self.retract(on)
+    # ------------------------------------------------------------------ #
+    #  Domination pruning — prune if closed node has same state at       #
+    #  equal or lower cost                                                #
+    # ------------------------------------------------------------------ #
 
     @Rule(
         Phase(name="score"),
         SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
         RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
-        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
-        StateReady(node_id=MATCH.nid),
-        ClosedPosSig(row=MATCH.r, col=MATCH.c, cargo_total=MATCH.cnt, node_id=MATCH.old_id, g_cost=MATCH.old_g),
+        StateSig(node_id=MATCH.nid, cargo=MATCH.cargo, delivered=MATCH.delivered),
+        ClosedPosSig(
+            row=MATCH.r, col=MATCH.c,
+            cargo=MATCH.cargo, delivered=MATCH.delivered,
+            g_cost=MATCH.old_g,
+        ),
         NOT(OpenNode(node_id=MATCH.nid)),
         NOT(ClosedNode(node_id=MATCH.nid)),
         NOT(PruneNode(node_id=MATCH.nid)),
-        NOT(CargoSnap(node_id=MATCH.nid) & NOT(CargoSnap(
-            node_id=MATCH.old_id,
-            flower_type=MATCH.ft,
-            color=MATCH.col,
-            quantity=MATCH.qty,
-        ))),
-        NOT(CargoSnap(node_id=MATCH.old_id) & NOT(CargoSnap(
-            node_id=MATCH.nid,
-            flower_type=MATCH.ft,
-            color=MATCH.col,
-            quantity=MATCH.qty,
-        ))),
-        NOT(DelSnap(node_id=MATCH.nid) & NOT(DelSnap(
-            node_id=MATCH.old_id,
-            pavilion_id=MATCH.pav,
-            flower_type=MATCH.ft,
-            color=MATCH.col,
-        ))),
-        NOT(DelSnap(node_id=MATCH.old_id) & NOT(DelSnap(
-            node_id=MATCH.nid,
-            pavilion_id=MATCH.pav,
-            flower_type=MATCH.ft,
-            color=MATCH.col,
-        ))),
         TEST(lambda g, old_g: g >= old_g),
         salience=36,
     )
-    def prune_dominated_state(self, nid, g, old_g):
+    def prune_dominated_by_closed(self, nid, g):
         self.declare(PruneNode(node_id=nid, reason="dominated"))
-        print(f"[PRUNE DOM] node={nid}, g={g} >= old_g={old_g}")
+
+    @Rule(
+        Phase(name="score"),
+        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
+        RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
+        StateSig(node_id=MATCH.nid, cargo=MATCH.cargo, delivered=MATCH.delivered),
+        OpenNode(node_id=MATCH.old_id, g_cost=MATCH.old_g),
+        StateSig(node_id=MATCH.old_id, cargo=MATCH.cargo, delivered=MATCH.delivered),
+        RobotState(node_id=MATCH.old_id, row=MATCH.r, col=MATCH.c),
+        NOT(OpenNode(node_id=MATCH.nid)),
+        NOT(ClosedNode(node_id=MATCH.nid)),
+        NOT(PruneNode(node_id=MATCH.nid)),
+        TEST(lambda nid, old_id, g, old_g: nid != old_id and g >= old_g),
+        salience=37,
+    )
+    def prune_dominated_by_open(self, nid, g):
+        self.declare(PruneNode(node_id=nid, reason="open_dup"))
+
+    @Rule(
+        Phase(name="score"),
+        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
+        RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
+        StateSig(node_id=MATCH.nid, cargo=MATCH.cargo, delivered=MATCH.delivered),
+        AS.on << OpenNode(node_id=MATCH.old_id, g_cost=MATCH.old_g),
+        StateSig(node_id=MATCH.old_id, cargo=MATCH.cargo, delivered=MATCH.delivered),
+        RobotState(node_id=MATCH.old_id, row=MATCH.r, col=MATCH.c),
+        NOT(OpenNode(node_id=MATCH.nid)),
+        NOT(ClosedNode(node_id=MATCH.nid)),
+        NOT(PruneNode(node_id=MATCH.nid)),
+        TEST(lambda nid, old_id, g, old_g: nid != old_id and g < old_g),
+        salience=38,
+    )
+    def replace_worse_open(self, nid, on, old_id):
+        self.retract(on)
+
+    # ------------------------------------------------------------------ #
+    #  Record closed signature for future domination checks              #
+    # ------------------------------------------------------------------ #
+
+    @Rule(
+        Phase(name="score"),
+        ClosedNode(node_id=MATCH.nid),
+        RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
+        SearchNode(node_id=MATCH.nid, g_cost=MATCH.g),
+        StateSig(node_id=MATCH.nid, cargo=MATCH.cargo, delivered=MATCH.delivered),
+        NOT(ClosedPosSig(node_id=MATCH.nid)),
+        salience=50,
+    )
+    def record_closed_sig(self, nid, r, c, g, cargo, delivered):
+        self.declare(ClosedPosSig(
+            node_id=nid, row=r, col=c, g_cost=g,
+            cargo=cargo, delivered=delivered,
+        ))
+
+    # ------------------------------------------------------------------ #
+    #  Open-list dedup — keep only best (lowest f then g) per node       #
+    # ------------------------------------------------------------------ #
+
+    @Rule(
+        AS.worse << OpenNode(node_id=MATCH.nid, f_cost=MATCH.fw, g_cost=MATCH.gw),
+        OpenNode(node_id=MATCH.nid, f_cost=MATCH.fb, g_cost=MATCH.gb),
+        TEST(lambda fw, fb, gw, gb:
+             (fw, gw) != (fb, gb) and (fb < fw or (fb == fw and gb < gw))),
+        salience=80,
+    )
+    def drop_worse_open(self, worse, nid):
+        self.retract(worse)
+
+    # ------------------------------------------------------------------ #
+    #  Drop pruned nodes from the search graph                           #
+    # ------------------------------------------------------------------ #
 
     @Rule(
         AS.sn << SearchNode(node_id=MATCH.nid),
-        PruneNode(node_id=MATCH.nid, reason="dominated"),
+        PruneNode(node_id=MATCH.nid),
         NOT(OpenNode(node_id=MATCH.nid)),
         NOT(ClosedNode(node_id=MATCH.nid)),
         salience=40,
     )
-    def drop_dominated_node(self, sn, nid):
+    def drop_pruned_node(self, sn, nid):
         self.retract(sn)

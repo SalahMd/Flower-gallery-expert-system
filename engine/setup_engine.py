@@ -1,13 +1,5 @@
-from config.config import (
-    GRID_ROWS, GRID_COLS, WAREHOUSE_POS, ROBOT_START,
-    PAVILIONS, PAVILION_NEEDS, WAREHOUSE_STOCK,
-)
-from facts.world_facts import (
-    Grid, Cell, NeighborCell, Warehouse, WarehouseStock, Pavilion,
-    FlowerKind, FlowerColor, Bouquet,
-    PavilionNeed, PavilionBouquetTotal,
-    PavilionColorNeedTotal, PavilionFlowerNeedTotal,
-)
+from config.config import *
+from facts.world_facts import *
 from facts.robot_facts import RobotPosition, RobotState, RobotEmpty, AtWarehouse, RobotCapacity
 from facts.cargo_facts import MaxCapacity, TotalCargoCount
 from facts.search_facts import SearchNode, OpenNode, NodeCounter
@@ -29,62 +21,47 @@ def _neighbors(rows, cols):
 def _max_capacity():
     best = 0
     for needs in PAVILION_NEEDS.values():
-        total = 0
-        for item in needs:
-            total = total + item[2]
+        total = sum(item[2] for item in needs)
         if total > best:
             best = total
     return best
 
 
 def _unique_flowers():
-    kinds = []
-    colors = []
-    bouquets = []
-    seen_k = set()
-    seen_c = set()
-    seen_b = set()
-    for stock in WAREHOUSE_STOCK:
-        ft, col = stock[0], stock[1]
+    seen_k, seen_c, seen_b = set(), set(), set()
+    kinds, colors, bouquets = [], [], []
+    for ft, col in WAREHOUSE_STOCK:
         if ft not in seen_k:
             seen_k.add(ft)
             kinds.append(ft)
         if col not in seen_c:
             seen_c.add(col)
             colors.append(col)
-        key = (ft, col)
-        if key not in seen_b:
-            seen_b.add(key)
-            bouquets.append(key)
-    for pid, needs in PAVILION_NEEDS.items():
-        for item in needs:
-            ft, col = item[0], item[1]
+        if (ft, col) not in seen_b:
+            seen_b.add((ft, col))
+            bouquets.append((ft, col))
+    for needs in PAVILION_NEEDS.values():
+        for ft, col, _ in needs:
             if ft not in seen_k:
                 seen_k.add(ft)
                 kinds.append(ft)
             if col not in seen_c:
                 seen_c.add(col)
                 colors.append(col)
-            key = (ft, col)
-            if key not in seen_b:
-                seen_b.add(key)
-                bouquets.append(key)
+            if (ft, col) not in seen_b:
+                seen_b.add((ft, col))
+                bouquets.append((ft, col))
     return kinds, colors, bouquets
 
 
 def _pavilion_totals():
-    bouquet_totals = {}
-    color_totals = {}
-    flower_totals = {}
+    bouquet_totals, color_totals, flower_totals = {}, {}, {}
     for pid, needs in PAVILION_NEEDS.items():
         btotal = 0
-        for item in needs:
-            ft, col, qty = item[0], item[1], item[2]
-            btotal = btotal + qty
-            ck = (pid, col)
-            color_totals[ck] = color_totals.get(ck, 0) + qty
-            fk = (pid, ft)
-            flower_totals[fk] = flower_totals.get(fk, 0) + qty
+        for ft, col, qty in needs:
+            btotal += qty
+            color_totals[(pid, col)]  = color_totals.get((pid, col), 0) + qty
+            flower_totals[(pid, ft)]  = flower_totals.get((pid, ft), 0) + qty
         bouquet_totals[pid] = btotal
     return bouquet_totals, color_totals, flower_totals
 
@@ -97,17 +74,14 @@ def build_initial_facts():
         for c in range(GRID_COLS):
             facts.append(Cell(row=r, col=c))
 
-    for link in _neighbors(GRID_ROWS, GRID_COLS):
-        facts.append(NeighborCell(
-            from_row=link[0], from_col=link[1], direction=link[2],
-            to_row=link[3], to_col=link[4],
-        ))
+    for r, c, d, tr, tc in _neighbors(GRID_ROWS, GRID_COLS):
+        facts.append(NeighborCell(from_row=r, from_col=c, direction=d, to_row=tr, to_col=tc))
 
     wh_r, wh_c = WAREHOUSE_POS
     facts.append(Warehouse(row=wh_r, col=wh_c))
 
-    for pid, pos in PAVILIONS.items():
-        facts.append(Pavilion(id=pid, row=pos[0], col=pos[1]))
+    for pid, (pr, pc) in PAVILIONS.items():
+        facts.append(Pavilion(id=pid, row=pr, col=pc))
 
     kinds, colors, bouquets = _unique_flowers()
     for name in kinds:
@@ -117,22 +91,20 @@ def build_initial_facts():
     for ft, col in bouquets:
         facts.append(Bouquet(flower_type=ft, color=col))
 
-    for stock in WAREHOUSE_STOCK:
-        facts.append(WarehouseStock(flower_type=stock[0], color=stock[1]))
+    for ft, col in WAREHOUSE_STOCK:
+        facts.append(WarehouseStock(flower_type=ft, color=col))
 
     for pid, needs in PAVILION_NEEDS.items():
-        for item in needs:
-            facts.append(PavilionNeed(
-                pavilion_id=pid, flower_type=item[0], color=item[1], quantity=item[2],
-            ))
+        for ft, col, qty in needs:
+            facts.append(PavilionNeed(pavilion_id=pid, flower_type=ft, color=col, quantity=qty))
 
     bouquet_totals, color_totals, flower_totals = _pavilion_totals()
     for pid, total in bouquet_totals.items():
         facts.append(PavilionBouquetTotal(pavilion_id=pid, total=total))
-    for key, total in color_totals.items():
-        facts.append(PavilionColorNeedTotal(pavilion_id=key[0], color=key[1], total=total))
-    for key, total in flower_totals.items():
-        facts.append(PavilionFlowerNeedTotal(pavilion_id=key[0], flower_type=key[1], total=total))
+    for (pid, col), total in color_totals.items():
+        facts.append(PavilionColorNeedTotal(pavilion_id=pid, color=col, total=total))
+    for (pid, ft), total in flower_totals.items():
+        facts.append(PavilionFlowerNeedTotal(pavilion_id=pid, flower_type=ft, total=total))
 
     start_r, start_c = ROBOT_START
     cap = _max_capacity()
@@ -155,78 +127,40 @@ def build_initial_facts():
 
     return facts
 
-
 def build_demo_facts():
     facts = [
         Grid(rows=3, cols=3),
+
         Cell(row=0, col=0), Cell(row=0, col=1), Cell(row=0, col=2),
         Cell(row=1, col=0), Cell(row=1, col=1), Cell(row=1, col=2),
         Cell(row=2, col=0), Cell(row=2, col=1), Cell(row=2, col=2),
-        NeighborCell(from_row=0, from_col=0, direction="right", to_row=0, to_col=1),
-        NeighborCell(from_row=0, from_col=1, direction="left", to_row=0, to_col=0),
-        NeighborCell(from_row=0, from_col=1, direction="right", to_row=0, to_col=2),
-        NeighborCell(from_row=0, from_col=2, direction="left", to_row=0, to_col=1),
-        NeighborCell(from_row=1, from_col=0, direction="right", to_row=1, to_col=1),
-        NeighborCell(from_row=1, from_col=1, direction="left", to_row=1, to_col=0),
-        NeighborCell(from_row=1, from_col=1, direction="right", to_row=1, to_col=2),
-        NeighborCell(from_row=1, from_col=2, direction="left", to_row=1, to_col=1),
-        NeighborCell(from_row=2, from_col=0, direction="right", to_row=2, to_col=1),
-        NeighborCell(from_row=2, from_col=1, direction="left", to_row=2, to_col=0),
-        NeighborCell(from_row=2, from_col=1, direction="right", to_row=2, to_col=2),
-        NeighborCell(from_row=2, from_col=2, direction="left", to_row=2, to_col=1),
-        NeighborCell(from_row=0, from_col=0, direction="down", to_row=1, to_col=0),
-        NeighborCell(from_row=1, from_col=0, direction="up", to_row=0, to_col=0),
-        NeighborCell(from_row=1, from_col=0, direction="down", to_row=2, to_col=0),
-        NeighborCell(from_row=2, from_col=0, direction="up", to_row=1, to_col=0),
-        NeighborCell(from_row=0, from_col=1, direction="down", to_row=1, to_col=1),
-        NeighborCell(from_row=1, from_col=1, direction="up", to_row=0, to_col=1),
-        NeighborCell(from_row=1, from_col=1, direction="down", to_row=2, to_col=1),
-        NeighborCell(from_row=2, from_col=1, direction="up", to_row=1, to_col=1),
-        NeighborCell(from_row=0, from_col=2, direction="down", to_row=1, to_col=2),
-        NeighborCell(from_row=1, from_col=2, direction="up", to_row=0, to_col=2),
-        NeighborCell(from_row=1, from_col=2, direction="down", to_row=2, to_col=2),
-        NeighborCell(from_row=2, from_col=2, direction="up", to_row=1, to_col=2),
-        Warehouse(row=1, col=1),
-        Pavilion(id="p1", row=0, col=2),
-        Pavilion(id="p2", row=2, col=0),
-        Pavilion(id="p3", row=2, col=2),
+    ]
+
+    for r, c, d, tr, tc in _neighbors(3, 3):
+        facts.append(NeighborCell(from_row=r, from_col=c, direction=d, to_row=tr, to_col=tc))
+
+    facts += [
+        Warehouse(row=1, col=2),
+        Pavilion(id="p1", row=0, col=0),
+
         FlowerKind(name="rose"),
-        FlowerKind(name="tulip"),
         FlowerColor(name="red"),
-        FlowerColor(name="yellow"),
-        FlowerColor(name="pink"),
-        FlowerColor(name="white"),
         Bouquet(flower_type="rose", color="red"),
-        Bouquet(flower_type="rose", color="pink"),
-        Bouquet(flower_type="rose", color="white"),
-        Bouquet(flower_type="tulip", color="yellow"),
         WarehouseStock(flower_type="rose", color="red"),
-        WarehouseStock(flower_type="rose", color="pink"),
-        WarehouseStock(flower_type="rose", color="white"),
-        WarehouseStock(flower_type="tulip", color="yellow"),
+
         PavilionNeed(pavilion_id="p1", flower_type="rose", color="red", quantity=1),
-        PavilionNeed(pavilion_id="p1", flower_type="rose", color="pink", quantity=1),
-        PavilionNeed(pavilion_id="p1", flower_type="rose", color="white", quantity=1),
-        PavilionNeed(pavilion_id="p2", flower_type="tulip", color="yellow", quantity=1),
-        PavilionNeed(pavilion_id="p3", flower_type="rose", color="red", quantity=1),
-        PavilionBouquetTotal(pavilion_id="p1", total=3),
-        PavilionBouquetTotal(pavilion_id="p2", total=1),
-        PavilionBouquetTotal(pavilion_id="p3", total=1),
+        PavilionBouquetTotal(pavilion_id="p1", total=1),
         PavilionColorNeedTotal(pavilion_id="p1", color="red", total=1),
-        PavilionColorNeedTotal(pavilion_id="p1", color="pink", total=1),
-        PavilionColorNeedTotal(pavilion_id="p1", color="white", total=1),
-        PavilionColorNeedTotal(pavilion_id="p2", color="yellow", total=1),
-        PavilionColorNeedTotal(pavilion_id="p3", color="red", total=1),
-        PavilionFlowerNeedTotal(pavilion_id="p1", flower_type="rose", total=3),
-        PavilionFlowerNeedTotal(pavilion_id="p2", flower_type="tulip", total=1),
-        PavilionFlowerNeedTotal(pavilion_id="p3", flower_type="rose", total=1),
-        RobotPosition(node_id="n0", row=1, col=1),
-        RobotState(node_id="n0", row=1, col=1),
+        PavilionFlowerNeedTotal(pavilion_id="p1", flower_type="rose", total=1),
+
+        RobotPosition(node_id="n0", row=0, col=2),
+        RobotState(node_id="n0", row=0, col=2),
         RobotEmpty(node_id="n0"),
-        AtWarehouse(node_id="n0"),
-        MaxCapacity(value=3),
-        RobotCapacity(value=3),
+
+        MaxCapacity(value=1),
+        RobotCapacity(value=1),
         TotalCargoCount(node_id="n0", count=0),
+
         SearchNode(node_id="n0", parent_id="n0", action="start", g_cost=0, h_cost=0, f_cost=0),
         NodeCounter(value=1),
         OpenNode(node_id="n0", f_cost=0, g_cost=0),

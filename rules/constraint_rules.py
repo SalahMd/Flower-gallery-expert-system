@@ -1,14 +1,15 @@
 
-from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
+from experta import *
 from facts.robot_facts import RobotState
-from facts.search_facts import SearchNode, OpenNode, ClosedNode
+from facts.search_facts import SearchNode, OpenNode, ClosedNode, Phase
 from facts.constraint_facts import PruneNode, ValidCargo
-from facts.cargo_facts import CargoItem, TotalCargoCount, MaxCapacity, MixedCargo, OverCapacity
+from facts.cargo_facts import *
 
 
 class ConstraintRules(KnowledgeEngine):
 
     @Rule(
+        Phase(name="score"),
         SearchNode(node_id=MATCH.nid),
         CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft1, color=MATCH.col1),
         CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft2, color=MATCH.col2),
@@ -21,9 +22,9 @@ class ConstraintRules(KnowledgeEngine):
     )
     def flag_mixed_cargo(self, nid, ft1, col1, ft2, col2):
         self.declare(MixedCargo(node_id=nid))
-        print(f"[MIXED CARGO] node={nid}, {ft1}-{col1} + {ft2}-{col2}")
-
+    
     @Rule(
+        Phase(name="score"),
         AS.sn << SearchNode(node_id=MATCH.nid),
         MixedCargo(node_id=MATCH.nid),
         NOT(OpenNode(node_id=MATCH.nid)),
@@ -33,9 +34,9 @@ class ConstraintRules(KnowledgeEngine):
     def prune_mixed(self, sn, nid):
         self.declare(PruneNode(node_id=nid, reason="mixed"))
         self.retract(sn)
-        print(f"[PRUNE MIXED] node={nid}")
 
     @Rule(
+        Phase(name="score"),
         SearchNode(node_id=MATCH.nid),
         TotalCargoCount(node_id=MATCH.nid, count=MATCH.count),
         MaxCapacity(value=MATCH.cap),
@@ -48,6 +49,7 @@ class ConstraintRules(KnowledgeEngine):
         self.declare(OverCapacity(node_id=nid))
 
     @Rule(
+        Phase(name="score"),
         AS.sn << SearchNode(node_id=MATCH.nid),
         OverCapacity(node_id=MATCH.nid),
         NOT(OpenNode(node_id=MATCH.nid)),
@@ -57,7 +59,6 @@ class ConstraintRules(KnowledgeEngine):
     def prune_capacity(self, sn, nid):
         self.declare(PruneNode(node_id=nid, reason="capacity"))
         self.retract(sn)
-        print(f"[PRUNE CAP] node={nid}")
 
     @Rule(
         SearchNode(node_id=MATCH.nid),

@@ -1,29 +1,56 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
-from facts.search_facts import (
-    Phase, CurrentNode, SearchNode, PendingSuccessor,
-    MoveGenerated, ExpandVisited, ExpandStarted,
-    NodeCounter, StateCopy,
-)
+from facts.cargo_facts import CargoItem, TotalCargoCount
+from facts.search_facts import *
 from facts.robot_facts import RobotState
-from facts.world_facts import NeighborCell, Warehouse, Pavilion
+from facts.world_facts import NeighborCell, PavilionNeed, Warehouse, Pavilion
 from facts.robot_facts import AtWarehouse, AtPavilion
 
 
-class MovementRules(KnowledgeEngine):
+class MovementRules:
 
+# Robot is empty → only moves that bring it closer to the warehouse are valid
     @Rule(
         Phase(name="expand"),
         CurrentNode(node_id=MATCH.nid),
         NOT(ExpandVisited(node_id=MATCH.nid)),
+        TotalCargoCount(node_id=MATCH.nid, count=0),
+        NOT(AtWarehouse(node_id=MATCH.nid)),
         RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
-        NeighborCell(from_row=MATCH.r, from_col=MATCH.c, direction=MATCH.d, to_row=MATCH.tr, to_col=MATCH.tc),
+        NeighborCell(from_row=MATCH.r, from_col=MATCH.c, direction=MATCH.d,
+                    to_row=MATCH.tr, to_col=MATCH.tc),
+        Warehouse(row=MATCH.wh_r, col=MATCH.wh_c),
         NOT(MoveGenerated(parent_id=MATCH.nid, direction=MATCH.d)),
+        TEST(lambda r, c, tr, tc, wh_r, wh_c:
+            (abs(tr - wh_r) + abs(tc - wh_c)) < (abs(r - wh_r) + abs(c - wh_c))),
     )
-    def generate_move(self, nid, r, c, d, tr, tc):
+    def generate_move_empty(self, nid, r, c, d, tr, tc, wh_r, wh_c):
         self.declare(ExpandStarted(node_id=nid))
         self.declare(MoveGenerated(parent_id=nid, direction=d))
         self.declare(PendingSuccessor(slot=f"move_{d}", parent_id=nid))
-        print(f"[MOVE GEN] node={nid}, dir={d}, to=({tr},{tc})")
+
+    # Robot has cargo → only moves toward a pavilion that needs what it carries
+    @Rule(
+        Phase(name="expand"),
+        CurrentNode(node_id=MATCH.nid),
+        NOT(ExpandVisited(node_id=MATCH.nid)),
+        TotalCargoCount(node_id=MATCH.nid, count=MATCH.cnt),
+        TEST(lambda cnt: cnt > 0),
+        RobotState(node_id=MATCH.nid, row=MATCH.r, col=MATCH.c),
+        CargoItem(node_id=MATCH.nid, flower_type=MATCH.ft, color=MATCH.col),
+        NOT(Delivered(node_id=MATCH.nid, pavilion_id=MATCH.pav,
+                    flower_type=MATCH.ft, color=MATCH.col)),
+        PavilionNeed(pavilion_id=MATCH.pav, flower_type=MATCH.ft, color=MATCH.col),
+        Pavilion(id=MATCH.pav, row=MATCH.pav_r, col=MATCH.pav_c),
+        NeighborCell(from_row=MATCH.r, from_col=MATCH.c, direction=MATCH.d,
+                    to_row=MATCH.tr, to_col=MATCH.tc),
+        NOT(MoveGenerated(parent_id=MATCH.nid, direction=MATCH.d)),
+        TEST(lambda r, c, tr, tc, pav_r, pav_c:
+            (abs(tr - pav_r) + abs(tc - pav_c)) < (abs(r - pav_r) + abs(c - pav_c))),
+    )
+    def generate_move_loaded(self, nid, r, c, d, tr, tc, ft, col, pav, pav_r, pav_c, cnt):
+        self.declare(ExpandStarted(node_id=nid))
+        self.declare(MoveGenerated(parent_id=nid, direction=d))
+        self.declare(PendingSuccessor(slot=f"move_{d}", parent_id=nid))
 
     @Rule(
         AS.ps << PendingSuccessor(slot=MATCH.slot, parent_id=MATCH.pid),
@@ -33,6 +60,7 @@ class MovementRules(KnowledgeEngine):
         NeighborCell(from_row=MATCH.r, from_col=MATCH.c, direction=MATCH.d, to_row=MATCH.tr, to_col=MATCH.tc),
         AS.nc << NodeCounter(value=MATCH.v),
         TEST(lambda slot, d: slot == f"move_{d}"),
+        salience=100,
     )
     def apply_move(self, ps, pid, d, g, r, c, tr, tc, nc, v, slot):
         new_id = f"n{v}"
@@ -49,7 +77,6 @@ class MovementRules(KnowledgeEngine):
         ))
         self.declare(RobotState(node_id=new_id, row=tr, col=tc))
         self.declare(StateCopy(parent_id=pid, child_id=new_id))
-        print(f"[MOVE APPLY] new_id={new_id}, parent={pid}, dir={d}, to=({tr},{tc})")
 
     @Rule(
         StateCopy(parent_id=MATCH.pid, child_id=MATCH.cid),

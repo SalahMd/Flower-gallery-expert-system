@@ -1,10 +1,5 @@
 from experta import KnowledgeEngine, Rule, AS, NOT, MATCH, TEST
-from facts.search_facts import (
-    Phase, CurrentNode, SearchNode, PendingSuccessor,
-    UnloadColorGenerated, UnloadPavilionGenerated,
-    UnloadColorApply, UnloadPavilionApply, Delivered,
-    PavilionNeedUnmet, PavilionHasExtraCargo, ExpandVisited, ExpandStarted, NodeCounter,
-)
+from facts.search_facts import *
 from facts.robot_facts import AtPavilion, RobotState
 from facts.cargo_facts import CargoItem
 from facts.world_facts import PavilionNeed
@@ -27,7 +22,6 @@ class UnloadingRules(KnowledgeEngine):
         self.declare(ExpandStarted(node_id=nid))
         self.declare(UnloadColorGenerated(parent_id=nid, pavilion_id=pav, flower_type=ft, color=col))
         self.declare(PendingSuccessor(slot=f"unload_{pav}_{ft}_{col}", parent_id=nid))
-        print(f"[UNLOAD COLOR GEN] node={nid}, pav={pav}, {ft}-{col}, carried={carried}, need={needed}")
 
     @Rule(
         Phase(name="expand"),
@@ -82,7 +76,6 @@ class UnloadingRules(KnowledgeEngine):
         self.declare(ExpandStarted(node_id=nid))
         self.declare(UnloadPavilionGenerated(parent_id=nid, pavilion_id=pav))
         self.declare(PendingSuccessor(slot=f"unload_all_{pav}", parent_id=nid))
-        print(f"[UNLOAD ALL GEN] node={nid}, pav={pav}")
 
     @Rule(
         AS.ps << PendingSuccessor(slot=MATCH.slot, parent_id=MATCH.pid),
@@ -91,6 +84,7 @@ class UnloadingRules(KnowledgeEngine):
         RobotState(node_id=MATCH.pid, row=MATCH.r, col=MATCH.c),
         AS.nc << NodeCounter(value=MATCH.v),
         TEST(lambda slot, pav, ft, col: slot == f"unload_{pav}_{ft}_{col}"),
+        salience=100,
     )
     def apply_unload_color(self, ps, pid, pav, ft, col, g, r, c, nc, v, slot):
         new_id = f"n{v}"
@@ -107,7 +101,6 @@ class UnloadingRules(KnowledgeEngine):
         ))
         self.declare(RobotState(node_id=new_id, row=r, col=c))
         self.declare(UnloadColorApply(parent_id=pid, child_id=new_id, pavilion_id=pav, flower_type=ft, color=col))
-        print(f"[UNLOAD COLOR APPLY] new_id={new_id}, parent={pid}, pav={pav}, {ft}-{col}")
 
     @Rule(
         AS.ps << PendingSuccessor(slot=MATCH.slot, parent_id=MATCH.pid),
@@ -116,6 +109,7 @@ class UnloadingRules(KnowledgeEngine):
         RobotState(node_id=MATCH.pid, row=MATCH.r, col=MATCH.c),
         AS.nc << NodeCounter(value=MATCH.v),
         TEST(lambda slot, pav: slot == f"unload_all_{pav}"),
+        salience=100,
     )
     def apply_unload_pavilion(self, ps, pid, pav, g, r, c, nc, v, slot):
         new_id = f"n{v}"
@@ -132,4 +126,3 @@ class UnloadingRules(KnowledgeEngine):
         ))
         self.declare(RobotState(node_id=new_id, row=r, col=c))
         self.declare(UnloadPavilionApply(parent_id=pid, child_id=new_id, pavilion_id=pav))
-        print(f"[UNLOAD ALL APPLY] new_id={new_id}, parent={pid}, pav={pav}")
