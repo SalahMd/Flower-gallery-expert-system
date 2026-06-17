@@ -9,7 +9,7 @@ from rules.transition_rules import TransitionRules
 from rules.constraint_rules import ConstraintRules
 from rules.heuristic_rules import HeuristicRules
 from rules.goal_rules import GoalRules
-from rules.output_rules import OutputRules
+from rules.output_rules import *
 from rules.search_rules import SearchRules
 from utils.score_node import ScoredNode
 
